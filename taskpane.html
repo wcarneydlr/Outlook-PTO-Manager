@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PTO Return Assistant</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #181c27;
+      --surface2: #1e2333;
+      --border: #2a3045;
+      --accent: #4f8ef7;
+      --accent2: #7c5cbf;
+      --green: #3ecf8e;
+      --yellow: #f5c542;
+      --red: #f06464;
+      --text: #e8ecf4;
+      --muted: #8892aa;
+      --tag-bg: #1e2a45;
+      --radius: 8px;
+      --mono: 'DM Mono', monospace;
+      --sans: 'DM Sans', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .header-logo {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0;
+    }
+    .header-title { font-weight: 600; font-size: 14px; letter-spacing: -0.2px; }
+    .header-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .tab {
+      flex: 1; padding: 9px 0;
+      text-align: center; font-size: 12px; font-weight: 500;
+      color: var(--muted); cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab:hover:not(.active) { color: var(--text); }
+
+    /* ── Panels ── */
+    .panel { display: none; flex: 1; overflow-y: auto; flex-direction: column; }
+    .panel.active { display: flex; }
+
+    /* ── Section label ── */
+    .section-label {
+      font-family: var(--mono); font-size: 10px;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: var(--muted); padding: 12px 14px 6px;
+    }
+
+    /* ── Controls ── */
+    .ctrl-row {
+      display: flex; gap: 8px; padding: 0 14px 10px; align-items: center;
+    }
+    .ctrl-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+    input[type="date"], input[type="text"], select, textarea {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 12px;
+      padding: 6px 9px;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.15s;
+    }
+    input[type="date"]:focus, input[type="text"]:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+    }
+    select option { background: var(--surface2); }
+
+    .btn {
+      padding: 7px 14px; border-radius: var(--radius);
+      border: none; font-family: var(--sans); font-size: 12px;
+      font-weight: 500; cursor: pointer; transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #3a7de8; }
+    .btn-sm { padding: 5px 10px; font-size: 11px; }
+    .btn-ghost {
+      background: transparent; color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+    .btn-green { background: var(--green); color: #0f1117; }
+    .btn-green:hover { opacity: 0.88; }
+
+    /* ── Group cards ── */
+    .group-card {
+      margin: 0 10px 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .group-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 12px; cursor: pointer;
+      user-select: none;
+    }
+    .group-header:hover { background: var(--surface2); }
+    .group-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .group-name { font-weight: 500; flex: 1; font-size: 13px; }
+    .group-count {
+      font-family: var(--mono); font-size: 10px;
+      background: var(--tag-bg); color: var(--accent);
+      padding: 2px 7px; border-radius: 10px;
+    }
+    .group-chevron { color: var(--muted); font-size: 10px; transition: transform 0.2s; }
+    .group-card.collapsed .group-chevron { transform: rotate(-90deg); }
+
+    .email-list { border-top: 1px solid var(--border); }
+    .group-card.collapsed .email-list { display: none; }
+
+    .email-item {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .email-item:last-child { border-bottom: none; }
+    .email-item:hover { background: var(--surface2); }
+    .email-item.unread .email-subject { font-weight: 600; }
+    .email-from { font-size: 11px; color: var(--muted); margin-bottom: 2px; display: flex; justify-content: space-between; }
+    .email-subject { font-size: 12px; color: var(--text); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .email-preview { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .email-tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+    .etag {
+      font-size: 10px; font-family: var(--mono);
+      padding: 1px 6px; border-radius: 4px;
+      background: var(--tag-bg); color: var(--accent);
+    }
+    .etag.ask { background: #2a1f3a; color: #b07df5; }
+    .etag.cc { background: #1a2a1a; color: #5ab87a; }
+
+    /* ── Settings panel (Feature 1) ── */
+    .settings-block {
+      margin: 0 10px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+    .settings-block h4 { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+    .kw-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; min-height: 28px; }
+    .kw-chip {
+      display: flex; align-items: center; gap: 4px;
+      background: var(--tag-bg); color: var(--accent);
+      border-radius: 4px; padding: 3px 8px;
+      font-size: 11px; font-family: var(--mono);
+    }
+    .kw-chip .rm { cursor: pointer; color: var(--muted); font-size: 13px; line-height: 1; }
+    .kw-chip .rm:hover { color: var(--red); }
+    .kw-add-row { display: flex; gap: 6px; }
+
+    .color-dot-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+    .color-dot {
+      width: 14px; height: 14px; border-radius: 50%; cursor: pointer;
+      border: 2px solid transparent; transition: border-color 0.15s;
+    }
+    .color-dot.selected { border-color: #fff; }
+
+    /* ── Empty state ── */
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 8px;
+      color: var(--muted); padding: 20px;
+      text-align: center;
+    }
+    .empty-icon { font-size: 32px; opacity: 0.4; }
+    .empty-text { font-size: 13px; }
+
+    /* ── Calendar Panel ── */
+    .cal-event-card {
+      margin: 0 10px 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 11px 12px;
+    }
+    .cal-event-title { font-weight: 500; font-size: 13px; margin-bottom: 4px; }
+    .cal-event-meta { font-size: 11px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .cal-event-meta span { display: flex; align-items: center; gap: 3px; }
+    .cal-badge {
+      display: inline-block; font-size: 10px; font-family: var(--mono);
+      padding: 1px 6px; border-radius: 4px; margin-right: 4px;
+    }
+    .badge-teams { background: #1a2a4a; color: #5b9cf5; }
+    .badge-zoom { background: #1a2a1a; color: #4ab87a; }
+    .badge-category { background: #2a1f1a; color: #f5a052; }
+    .cal-event-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+    .criteria-block {
+      margin: 0 10px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+    .criteria-row {
+      display: flex; align-items: flex-start; gap: 8px;
+      margin-bottom: 10px;
+    }
+    .criteria-row:last-child { margin-bottom: 0; }
+    .criteria-label { font-size: 12px; color: var(--muted); width: 90px; flex-shrink: 0; padding-top: 7px; }
+    .criteria-controls { flex: 1; }
+    .logic-toggle {
+      display: flex; gap: 4px; margin-left: 8px; flex-shrink: 0; margin-top: 4px;
+    }
+    .logic-btn {
+      font-size: 10px; font-family: var(--mono);
+      padding: 3px 7px; border-radius: 4px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); cursor: pointer;
+      transition: all 0.15s;
+    }
+    .logic-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .toggle-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 0;
+    }
+    .toggle {
+      position: relative; width: 34px; height: 18px; flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0; cursor: pointer;
+      background: var(--surface2); border-radius: 9px;
+      border: 1px solid var(--border); transition: 0.2s;
+    }
+    .toggle-slider:before {
+      content: ''; position: absolute;
+      width: 12px; height: 12px; left: 2px; top: 2px;
+      background: var(--muted); border-radius: 50%; transition: 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
+    .toggle input:checked + .toggle-slider:before { transform: translateX(16px); background: #fff; }
+    .toggle-label { font-size: 12px; color: var(--text); }
+
+    .personal-email-row {
+      padding: 0 14px 10px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .personal-email-row label { font-size: 12px; color: var(--muted); }
+
+    /* ── Status toast ── */
+    #toast {
+      position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+      background: var(--green); color: #0f1117;
+      font-size: 12px; font-weight: 500;
+      padding: 7px 16px; border-radius: 20px;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+      z-index: 999; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .divider { height: 1px; background: var(--border); margin: 4px 10px 8px; }
+
+    .loading-dots {
+      display: flex; gap: 4px; align-items: center; justify-content: center; padding: 20px;
+    }
+    .loading-dots span {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); opacity: 0.3;
+      animation: blink 1.2s infinite;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,80%,100% { opacity: 0.2; } 40% { opacity: 1; } }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">✈</div>
+  <div>
+    <div class="header-title">PTO Return Assistant</div>
+    <div class="header-sub">Email triage &amp; calendar sync</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('triage')">📬 Email Triage</div>
+  <div class="tab" onclick="switchTab('calendar')">📅 Calendar Sync</div>
+  <div class="tab" onclick="switchTab('settings')">⚙ Settings</div>
+</div>
+
+<!-- ══════════════ TRIAGE PANEL ══════════════ -->
+<div id="panel-triage" class="panel active">
+
+  <div class="section-label">Date Range</div>
+  <div class="ctrl-row">
+    <label>From</label>
+    <input type="date" id="date-from"/>
+    <label>To</label>
+    <input type="date" id="date-to"/>
+  </div>
+  <div class="ctrl-row">
+    <button class="btn btn-primary" style="flex:1" onclick="loadEmails()">Load &amp; Group Emails</button>
+  </div>
+
+  <div id="triage-loading" style="display:none">
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+  </div>
+
+  <div id="triage-summary" style="display:none; padding: 0 14px 8px;">
+    <div style="font-size:11px; color:var(--muted); font-family:var(--mono);"></div>
+  </div>
+
+  <div id="group-container"></div>
+
+  <div id="triage-empty" class="empty-state">
+    <div class="empty-icon">📭</div>
+    <div class="empty-text">Set a date range and click<br><strong>Load &amp; Group Emails</strong> to begin.</div>
+  </div>
+</div>
+
+<!-- ══════════════ CALENDAR PANEL ══════════════ -->
+<div id="panel-calendar" class="panel">
+
+  <div class="section-label">Personal Email (Recipient)</div>
+  <div class="personal-email-row">
+    <label>Your personal Outlook/Hotmail address</label>
+    <input type="text" id="personal-email" placeholder="you@hotmail.com" />
+  </div>
+
+  <div class="section-label">Sync Criteria</div>
+  <div class="criteria-block">
+
+    <!-- Web conference toggle -->
+    <div class="criteria-row">
+      <div class="criteria-label">Conference</div>
+      <div class="criteria-controls">
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox" id="crit-conf" checked>
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label">Has Teams / Zoom / Meet link</span>
+        </div>
+      </div>
+      <div class="logic-toggle">
+        <button class="logic-btn active" data-crit="conf" data-val="OR" onclick="setLogic(this)">OR</button>
+        <button class="logic-btn" data-crit="conf" data-val="AND" onclick="setLogic(this)">AND</button>
+      </div>
+    </div>
+
+    <!-- Categories -->
+    <div class="criteria-row">
+      <div class="criteria-label">Categories</div>
+      <div class="criteria-controls">
+        <input type="text" id="crit-categories" placeholder="e.g. Client, Travel, Important (comma-separated)"/>
+      </div>
+      <div class="logic-toggle">
+        <button class="logic-btn active" data-crit="cat" data-val="OR" onclick="setLogic(this)">OR</button>
+        <button class="logic-btn" data-crit="cat" data-val="AND" onclick="setLogic(this)">AND</button>
+      </div>
+    </div>
+
+    <!-- Time range -->
+    <div class="criteria-row">
+      <div class="criteria-label">Time Range</div>
+      <div class="criteria-controls" style="display:flex; gap:6px;">
+        <input type="date" id="crit-cal-from"/>
+        <input type="date" id="crit-cal-to"/>
+      </div>
+      <div class="logic-toggle">
+        <button class="logic-btn active" data-crit="time" data-val="OR" onclick="setLogic(this)">OR</button>
+        <button class="logic-btn" data-crit="time" data-val="AND" onclick="setLogic(this)">AND</button>
+      </div>
+    </div>
+
+    <!-- Keywords -->
+    <div class="criteria-row">
+      <div class="criteria-label">Keywords</div>
+      <div class="criteria-controls">
+        <input type="text" id="crit-keywords" placeholder="e.g. kickoff, review, standup (comma-separated)"/>
+      </div>
+      <div class="logic-toggle">
+        <button class="logic-btn active" data-crit="kw" data-val="OR" onclick="setLogic(this)">OR</button>
+        <button class="logic-btn" data-crit="kw" data-val="AND" onclick="setLogic(this)">AND</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="ctrl-row">
+    <button class="btn btn-primary" style="flex:1" onclick="loadCalendar()">Scan Calendar Events</button>
+  </div>
+
+  <div id="cal-loading" style="display:none">
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+  </div>
+
+  <div id="cal-container"></div>
+
+  <div id="cal-empty" class="empty-state">
+    <div class="empty-icon">📅</div>
+    <div class="empty-text">Configure criteria and scan<br>to find events to sync.</div>
+  </div>
+</div>
+
+<!-- ══════════════ SETTINGS PANEL ══════════════ -->
+<div id="panel-settings" class="panel">
+
+  <div class="section-label">Email Groups</div>
+  <div id="groups-settings-container"></div>
+  <div class="ctrl-row">
+    <button class="btn btn-primary btn-sm" onclick="addGroup()">+ Add Group</button>
+  </div>
+
+  <div class="divider"></div>
+  <div class="section-label">Default Date Range (days back)</div>
+  <div class="ctrl-row">
+    <input type="text" id="default-days" placeholder="e.g. 5" style="max-width:80px"/>
+    <label style="color:var(--muted)">days before today</label>
+  </div>
+
+  <div class="divider"></div>
+  <div class="section-label">My Team (exact email addresses)</div>
+  <div class="settings-block">
+    <div id="team-chips" class="kw-list"></div>
+    <div class="kw-add-row">
+      <input type="text" id="team-input" placeholder="name@dlrgroup.com"/>
+      <button class="btn btn-primary btn-sm" onclick="addTeamMember()">Add</button>
+    </div>
+  </div>
+
+  <div class="ctrl-row" style="padding-top:4px">
+    <button class="btn btn-green" style="flex:1" onclick="saveSettings()">Save Settings</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+const DEFAULT_GROUPS = [
+  {
+    id: 'renewals', name: 'Software Renewals', color: '#4f8ef7',
+    keywords: ['Renewal','Quote','Purchase Order','PO'],
+    pattern: null, teamOnly: false
+  },
+  {
+    id: 'projects', name: 'DLR Projects', color: '#3ecf8e',
+    keywords: [],
+    pattern: /\b\d{2}-\d{5}-\d{2}\b/, teamOnly: false
+  },
+  {
+    id: 'team', name: 'My Team', color: '#f5c542',
+    keywords: [],
+    pattern: null, teamOnly: true
+  }
+];
+
+let groups = JSON.parse(localStorage.getItem('pto_groups') || 'null') || DEFAULT_GROUPS.map(g => ({...g, pattern: g.pattern ? g.pattern.source : null}));
+let teamMembers = JSON.parse(localStorage.getItem('pto_team') || '[]');
+let logicState = { conf: 'OR', cat: 'OR', time: 'OR', kw: 'OR' };
+const COLORS = ['#4f8ef7','#3ecf8e','#f5c542','#f06464','#b07df5','#f5a052','#4fc4cf'];
+
+// ═══════════════════════════════════════════════
+//  OFFICE INIT
+// ═══════════════════════════════════════════════
+Office.onReady(function(info) {
+  if (info.host === Office.HostType.Outlook) {
+    initDates();
+    renderSettingsGroups();
+    renderTeamChips();
+    loadSavedPersonalEmail();
+  }
+});
+
+function initDates() {
+  const today = new Date();
+  const daysBack = parseInt(localStorage.getItem('pto_default_days') || '5');
+  const from = new Date(today); from.setDate(from.getDate() - daysBack);
+  document.getElementById('date-from').value = toDateInput(from);
+  document.getElementById('date-to').value = toDateInput(today);
+
+  document.getElementById('crit-cal-from').value = toDateInput(today);
+  const calTo = new Date(today); calTo.setDate(calTo.getDate() + 30);
+  document.getElementById('crit-cal-to').value = toDateInput(calTo);
+
+  const days = localStorage.getItem('pto_default_days');
+  if (days) document.getElementById('default-days').value = days;
+}
+
+function toDateInput(d) {
+  return d.toISOString().split('T')[0];
+}
+
+function loadSavedPersonalEmail() {
+  const saved = localStorage.getItem('pto_personal_email');
+  if (saved) document.getElementById('personal-email').value = saved;
+}
+
+// ═══════════════════════════════════════════════
+//  TAB SWITCHING
+// ═══════════════════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['triage','calendar','settings'][i] === tab);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════
+//  FEATURE 1: EMAIL TRIAGE
+// ═══════════════════════════════════════════════
+function loadEmails() {
+  const fromStr = document.getElementById('date-from').value;
+  const toStr   = document.getElementById('date-to').value;
+  if (!fromStr || !toStr) { toast('Please select a date range.'); return; }
+
+  const fromDate = new Date(fromStr + 'T00:00:00');
+  const toDate   = new Date(toStr   + 'T23:59:59');
+
+  document.getElementById('triage-empty').style.display = 'none';
+  document.getElementById('triage-loading').style.display = 'block';
+  document.getElementById('group-container').innerHTML = '';
+  document.getElementById('triage-summary').style.display = 'none';
+
+  // Use Office mailbox REST API to get messages
+  const mailbox = Office.context.mailbox;
+  const token = mailbox.getUserIdentityTokenAsync;
+
+  // Build REST URL with date filter
+  const restUrl = mailbox.restUrl;
+  const accessToken = null; // will use getCallbackTokenAsync
+
+  mailbox.getCallbackTokenAsync({ isRest: true }, function(result) {
+    if (result.status !== Office.AsyncResultStatus.Succeeded) {
+      fallbackDemo(fromDate, toDate);
+      return;
+    }
+    const token = result.value;
+    const apiBase = mailbox.restUrl + '/v2.0/me/mailfolders/inbox/messages';
+    const filter = `ReceivedDateTime ge ${fromDate.toISOString()} and ReceivedDateTime le ${toDate.toISOString()}`;
+    const select = 'Subject,From,ReceivedDateTime,IsRead,BodyPreview,ToRecipients,CcRecipients,Id';
+    const url = `${apiBase}?$filter=${encodeURIComponent(filter)}&$select=${select}&$top=100&$orderby=ReceivedDateTime desc`;
+
+    fetch(url, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } })
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('triage-loading').style.display = 'none';
+        if (data.value && data.value.length > 0) {
+          processAndRenderEmails(data.value);
+        } else {
+          document.getElementById('triage-empty').style.display = 'flex';
+          document.getElementById('triage-empty').querySelector('.empty-text').innerHTML =
+            'No emails found in the selected date range.';
+        }
+      })
+      .catch(() => fallbackDemo(fromDate, toDate));
+  });
+}
+
+function fallbackDemo(fromDate, toDate) {
+  // Demo data for when REST token is unavailable (sideload testing)
+  document.getElementById('triage-loading').style.display = 'none';
+  const demo = [
+    { Subject:'Software Renewal - Adobe CC 2026', From:{EmailAddress:{Name:'Adobe Systems',Address:'noreply@adobe.com'}}, ReceivedDateTime: new Date().toISOString(), IsRead:false, BodyPreview:'Your Adobe Creative Cloud renewal is coming up on April 15...', ToRecipients:[], CcRecipients:[], Id:'1' },
+    { Subject:'Purchase Order #24-00892 Approved', From:{EmailAddress:{Name:'Procurement',Address:'procurement@dlrgroup.com'}}, ReceivedDateTime: new Date().toISOString(), IsRead:true, BodyPreview:'PO for Microsoft 365 licenses has been approved...', ToRecipients:[], CcRecipients:[], Id:'2' },
+    { Subject:'RE: 26-45123-01 Schematic Design Review', From:{EmailAddress:{Name:'Andy Wallace',Address:'awallace@dlrgroup.com'}}, ReceivedDateTime: new Date().toISOString(), IsRead:false, BodyPreview:'Attached the updated SD drawings for your review...', ToRecipients:[], CcRecipients:[], Id:'3' },
+    { Subject:'26-45123-01 RFI #14 - Structural', From:{EmailAddress:{Name:'Devin Brown',Address:'dbrown@dlrgroup.com'}}, ReceivedDateTime: new Date().toISOString(), IsRead:false, BodyPreview:'RFI from contractor regarding structural connections at Level 3...', ToRecipients:[], CcRecipients:[], Id:'4' },
+    { Subject:'Quote Request - Autodesk AEC Collection', From:{EmailAddress:{Name:'Autodesk',Address:'sales@autodesk.com'}}, ReceivedDateTime: new Date().toISOString(), IsRead:true, BodyPreview:'Thank you for your inquiry. Attached is the quote for...', ToRecipients:[], CcRecipients:[], Id:'5' },
+    { Subject:'Team Lunch Thursday?', From:{EmailAddress:{Name:'Brian Myers',Address:'bmyers@dlrgroup.com'}}, ReceivedDateTime: new Date().toISOString(), IsRead:false, BodyPreview:'Hey, are you free Thursday for a team lunch? We were thinking...', ToRecipients:[], CcRecipients:[], Id:'6' },
+    { Subject:'FWD: Office all-hands next week', From:{EmailAddress:{Name:'HR',Address:'hr@dlrgroup.com'}}, ReceivedDateTime: new Date().toISOString(), IsRead:true, BodyPreview:'Please join us for the monthly all-hands meeting...', ToRecipients:[], CcRecipients:[], Id:'7' },
+  ];
+  processAndRenderEmails(demo);
+}
+
+function processAndRenderEmails(emails) {
+  const buckets = {};
+  groups.forEach(g => { buckets[g.id] = []; });
+  buckets['_other'] = [];
+
+  const myTeamLower = teamMembers.map(e => e.toLowerCase());
+
+  emails.forEach(email => {
+    const subject = email.Subject || '';
+    const from = email.From?.EmailAddress?.Address?.toLowerCase() || '';
+    let matched = false;
+
+    for (const g of groups) {
+      // Team-only group
+      if (g.teamOnly) {
+        if (myTeamLower.includes(from)) {
+          buckets[g.id].push(email); matched = true; break;
+        }
+        continue;
+      }
+      // Pattern match (DLR project numbers: ##-#####-##)
+      if (g.pattern) {
+        const re = new RegExp(g.pattern);
+        if (re.test(subject)) { buckets[g.id].push(email); matched = true; break; }
+      }
+      // Keyword match
+      if (g.keywords && g.keywords.length > 0) {
+        const kws = g.keywords.map(k => k.toLowerCase());
+        if (kws.some(k => subject.toLowerCase().includes(k))) {
+          buckets[g.id].push(email); matched = true; break;
+        }
+      }
+    }
+    if (!matched) buckets['_other'].push(email);
+  });
+
+  // Summary
+  const totalGroups = Object.values(buckets).filter(b => b.length > 0).length;
+  const withAsks = emails.filter(e => detectAsk(e)).length;
+  const ccCount = emails.filter(e => isCcOnly(e)).length;
+  document.getElementById('triage-summary').style.display = 'block';
+  document.getElementById('triage-summary').querySelector('div').textContent =
+    `${emails.length} emails · ${totalGroups} groups · ${withAsks} with questions · ${ccCount} CC/FYI`;
+
+  const container = document.getElementById('group-container');
+  container.innerHTML = '';
+
+  groups.forEach(g => {
+    if (buckets[g.id].length > 0) {
+      container.appendChild(buildGroupCard(g.name, g.color, buckets[g.id]));
+    }
+  });
+
+  if (buckets['_other'].length > 0) {
+    container.appendChild(buildGroupCard('Other', '#8892aa', buckets['_other']));
+  }
+
+  if (container.children.length === 0) {
+    document.getElementById('triage-empty').style.display = 'flex';
+  }
+}
+
+function detectAsk(email) {
+  const preview = (email.BodyPreview || '') + (email.Subject || '');
+  return /\?/.test(preview);
+}
+
+function isCcOnly(email) {
+  // Simplified: check if user's email is in CC but not To
+  return email.CcRecipients && email.CcRecipients.length > 0 &&
+         (!email.ToRecipients || email.ToRecipients.length === 0);
+}
+
+function buildGroupCard(name, color, emails) {
+  const card = document.createElement('div');
+  card.className = 'group-card';
+
+  const header = document.createElement('div');
+  header.className = 'group-header';
+  header.innerHTML = `
+    <span class="group-dot" style="background:${color}"></span>
+    <span class="group-name">${name}</span>
+    <span class="group-count">${emails.length}</span>
+    <span class="group-chevron">▼</span>
+  `;
+  header.onclick = () => card.classList.toggle('collapsed');
+
+  const list = document.createElement('div');
+  list.className = 'email-list';
+
+  emails.forEach(email => {
+    const item = document.createElement('div');
+    item.className = 'email-item' + (email.IsRead ? '' : ' unread');
+
+    const from = email.From?.EmailAddress?.Name || email.From?.EmailAddress?.Address || 'Unknown';
+    const date = new Date(email.ReceivedDateTime);
+    const dateStr = date.toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+    const hasAsk = detectAsk(email);
+    const isCC = isCcOnly(email);
+
+    item.innerHTML = `
+      <div class="email-from"><span>${from}</span><span>${dateStr}</span></div>
+      <div class="email-subject">${email.Subject || '(no subject)'}</div>
+      <div class="email-preview">${email.BodyPreview || ''}</div>
+      <div class="email-tags">
+        ${hasAsk ? '<span class="etag ask">❓ action needed</span>' : ''}
+        ${isCC ? '<span class="etag cc">CC</span>' : ''}
+      </div>
+    `;
+    item.onclick = () => openEmail(email.Id);
+    list.appendChild(item);
+  });
+
+  card.appendChild(header);
+  card.appendChild(list);
+  return card;
+}
+
+function openEmail(id) {
+  // Attempt to open email — works in full Outlook context
+  try {
+    Office.context.mailbox.displayMessageForm(id);
+  } catch(e) {
+    toast('Click the email in your inbox to open it.');
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  FEATURE 2: CALENDAR SYNC
+// ═══════════════════════════════════════════════
+function loadCalendar() {
+  const personalEmail = document.getElementById('personal-email').value.trim();
+  if (!personalEmail) { toast('Please enter your personal email address first.'); return; }
+  localStorage.setItem('pto_personal_email', personalEmail);
+
+  const fromStr = document.getElementById('crit-cal-from').value;
+  const toStr   = document.getElementById('crit-cal-to').value;
+  const categories = document.getElementById('crit-categories').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const keywords   = document.getElementById('crit-keywords').value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  const confEnabled = document.getElementById('crit-conf').checked;
+
+  document.getElementById('cal-empty').style.display = 'none';
+  document.getElementById('cal-loading').style.display = 'block';
+  document.getElementById('cal-container').innerHTML = '';
+
+  Office.context.mailbox.getCallbackTokenAsync({ isRest: true }, function(result) {
+    if (result.status !== Office.AsyncResultStatus.Succeeded) {
+      fallbackCalDemo(personalEmail, fromStr, toStr, categories, keywords, confEnabled);
+      return;
+    }
+    const token = result.value;
+    const base = Office.context.mailbox.restUrl;
+    const filter = `Start/DateTime ge '${fromStr}T00:00:00' and End/DateTime le '${toStr}T23:59:59'`;
+    const select = 'Subject,Start,End,Location,BodyPreview,Attendees,OnlineMeeting,Categories,Id,Body,Organizer';
+    const url = `${base}/v2.0/me/calendarview?startDateTime=${fromStr}T00:00:00Z&endDateTime=${toStr}T23:59:59Z&$select=${select}&$top=50`;
+
+    fetch(url, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json', Prefer: 'outlook.timezone="UTC"' } })
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('cal-loading').style.display = 'none';
+        const events = (data.value || []).filter(ev =>
+          matchesCalCriteria(ev, confEnabled, categories, keywords, fromStr, toStr)
+        );
+        renderCalEvents(events, personalEmail);
+      })
+      .catch(() => fallbackCalDemo(personalEmail, fromStr, toStr, categories, keywords, confEnabled));
+  });
+}
+
+const CONF_PATTERNS = [/teams\.microsoft\.com/i, /zoom\.us/i, /meet\.google\.com/i, /webex\.com/i, /gotomeeting\.com/i];
+
+function hasConferenceLink(ev) {
+  const body = (ev.Body?.Content || ev.BodyPreview || '');
+  return CONF_PATTERNS.some(p => p.test(body)) || !!ev.OnlineMeeting?.joinUrl;
+}
+
+function extractConferenceType(ev) {
+  const body = ev.Body?.Content || ev.BodyPreview || '';
+  if (/teams\.microsoft\.com/i.test(body) || ev.OnlineMeeting?.joinUrl) return 'teams';
+  if (/zoom\.us/i.test(body)) return 'zoom';
+  if (/meet\.google\.com/i.test(body)) return 'meet';
+  return 'conference';
+}
+
+function extractJoinUrl(ev) {
+  if (ev.OnlineMeeting?.joinUrl) return ev.OnlineMeeting.joinUrl;
+  const body = ev.Body?.Content || ev.BodyPreview || '';
+  const m = body.match(/https?:\/\/(teams\.microsoft\.com|zoom\.us|meet\.google\.com)[^\s"<>]+/i);
+  return m ? m[0] : null;
+}
+
+function matchesCalCriteria(ev, confEnabled, categories, keywords, fromStr, toStr) {
+  const criteriaMet = [];
+
+  if (confEnabled) {
+    criteriaMet.push({ crit: 'conf', met: hasConferenceLink(ev) });
+  }
+  if (categories.length > 0) {
+    const evCats = ev.Categories || [];
+    criteriaMet.push({ crit: 'cat', met: categories.some(c => evCats.some(ec => ec.toLowerCase().includes(c.toLowerCase()))) });
+  }
+  if (keywords.length > 0) {
+    const title = (ev.Subject || '').toLowerCase();
+    criteriaMet.push({ crit: 'kw', met: keywords.some(k => title.includes(k)) });
+  }
+  if (fromStr && toStr) {
+    criteriaMet.push({ crit: 'time', met: true }); // already filtered by API
+  }
+
+  if (criteriaMet.length === 0) return true;
+
+  // Each criteria uses its own AND/OR logic vs the others
+  // For now: if any enabled criteria is met, include (OR across criteria groups)
+  return criteriaMet.some(c => {
+    if (logicState[c.crit] === 'AND') return c.met;
+    return c.met;
+  });
+}
+
+function fallbackCalDemo(personalEmail, fromStr, toStr, categories, keywords, confEnabled) {
+  document.getElementById('cal-loading').style.display = 'none';
+  const demo = [
+    { Subject: 'Project Kickoff - 26-45123-01', Start:{ DateTime: '2026-04-08T09:00:00' }, End:{ DateTime:'2026-04-08T10:00:00' }, Location:'Teams', BodyPreview:'Join us for the kickoff meeting. Teams link: https://teams.microsoft.com/l/meetup-join/abc123', Attendees:[{EmailAddress:{Name:'Andy Wallace'}},{EmailAddress:{Name:'Devin Brown'}}], Categories:['Client'], Id:'cal1', OnlineMeeting:{ joinUrl:'https://teams.microsoft.com/l/meetup-join/abc123' } },
+    { Subject: 'Software Renewal Review', Start:{ DateTime:'2026-04-09T14:00:00' }, End:{ DateTime:'2026-04-09T15:00:00' }, Location:'Zoom', BodyPreview:'Quarterly review of software renewals. Zoom: https://zoom.us/j/9876543210', Attendees:[{EmailAddress:{Name:'Brian Myers'}}], Categories:['Internal'], Id:'cal2', OnlineMeeting:null },
+  ];
+  renderCalEvents(demo, personalEmail);
+}
+
+function renderCalEvents(events, personalEmail) {
+  const container = document.getElementById('cal-container');
+  container.innerHTML = '';
+
+  if (events.length === 0) {
+    document.getElementById('cal-empty').style.display = 'flex';
+    document.getElementById('cal-empty').querySelector('.empty-text').innerHTML = 'No matching events found.<br>Try adjusting your criteria.';
+    return;
+  }
+
+  events.forEach(ev => {
+    const card = document.createElement('div');
+    card.className = 'cal-event-card';
+
+    const start = new Date(ev.Start.DateTime);
+    const end   = new Date(ev.End.DateTime);
+    const dateStr = start.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+    const timeStr = `${start.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})} – ${end.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`;
+
+    const confType = hasConferenceLink(ev) ? extractConferenceType(ev) : null;
+    const cats = ev.Categories || [];
+    const attendees = (ev.Attendees || []).map(a => a.EmailAddress?.Name || a.EmailAddress?.Address).filter(Boolean);
+
+    const badges = [
+      confType === 'teams' ? '<span class="cal-badge badge-teams">Teams</span>' : '',
+      confType === 'zoom'  ? '<span class="cal-badge badge-zoom">Zoom</span>'  : '',
+      confType === 'meet'  ? '<span class="cal-badge badge-zoom">Meet</span>'  : '',
+      cats.map(c => `<span class="cal-badge badge-category">${c}</span>`).join('')
+    ].join('');
+
+    card.innerHTML = `
+      <div class="cal-event-title">${badges}${ev.Subject || '(no title)'}</div>
+      <div class="cal-event-meta">
+        <span>📅 ${dateStr}</span>
+        <span>🕐 ${timeStr}</span>
+        ${ev.Location ? `<span>📍 ${ev.Location}</span>` : ''}
+        ${attendees.length ? `<span>👥 ${attendees.slice(0,3).join(', ')}${attendees.length>3?' +more':''}</span>` : ''}
+      </div>
+      <div class="cal-event-actions">
+        <button class="btn btn-green btn-sm" onclick="syncEvent(${JSON.stringify(ev).replace(/"/g,'&quot;')}, '${personalEmail}')">📨 Sync to Personal</button>
+        <button class="btn btn-ghost btn-sm" onclick="previewEvent(${JSON.stringify(ev).replace(/"/g,'&quot;')})">Preview</button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function syncEvent(ev, personalEmail) {
+  // Create a new meeting request to personal email
+  const start = new Date(ev.Start.DateTime);
+  const end   = new Date(ev.End.DateTime);
+  const attendees = (ev.Attendees || []).map(a => a.EmailAddress?.Name || '').filter(Boolean);
+  const joinUrl = extractJoinUrl(ev);
+
+  const body = [
+    `Synced from work calendar.`,
+    ``,
+    `Original attendees: ${attendees.join(', ') || 'N/A'}`,
+    joinUrl ? `Join link: ${joinUrl}` : '',
+    ``,
+    ev.BodyPreview || ''
+  ].filter(l => l !== null).join('\n');
+
+  Office.context.mailbox.displayNewAppointmentForm({
+    requiredAttendees: [personalEmail],
+    optionalAttendees: [],
+    start: start,
+    end: end,
+    location: ev.Location || '',
+    subject: ev.Subject || '',
+    body: body
+  });
+
+  toast('Event opened — review and Send to sync to your personal calendar!');
+}
+
+function previewEvent(ev) {
+  const attendees = (ev.Attendees || []).map(a => a.EmailAddress?.Name || a.EmailAddress?.Address).filter(Boolean);
+  const joinUrl = extractJoinUrl(ev);
+  const start = new Date(ev.Start.DateTime);
+  const end = new Date(ev.End.DateTime);
+  alert([
+    `📅 ${ev.Subject}`,
+    `Time: ${start.toLocaleString()} – ${end.toLocaleTimeString()}`,
+    `Location: ${ev.Location || 'N/A'}`,
+    `Attendees: ${attendees.join(', ') || 'None listed'}`,
+    joinUrl ? `Join: ${joinUrl}` : '',
+  ].filter(Boolean).join('\n'));
+}
+
+// ═══════════════════════════════════════════════
+//  SETTINGS
+// ═══════════════════════════════════════════════
+function renderSettingsGroups() {
+  const c = document.getElementById('groups-settings-container');
+  c.innerHTML = '';
+  groups.forEach((g, i) => {
+    const block = document.createElement('div');
+    block.className = 'settings-block';
+    block.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <h4 style="display:flex;align-items:center;gap:6px;">
+          <span style="width:10px;height:10px;border-radius:50%;background:${g.color};display:inline-block"></span>
+          ${g.name}
+        </h4>
+        <button class="btn btn-ghost btn-sm" onclick="removeGroup(${i})" style="color:var(--red);border-color:var(--red)">✕</button>
+      </div>
+      <div class="color-dot-row">
+        ${COLORS.map(col => `<span class="color-dot ${col===g.color?'selected':''}" style="background:${col}" onclick="setGroupColor(${i},'${col}',this)"></span>`).join('')}
+      </div>
+      <div style="margin-bottom:6px;font-size:11px;color:var(--muted)">Keywords (one per line):</div>
+      <textarea rows="3" style="width:100%;margin-bottom:6px;resize:none;font-size:11px"
+        onchange="updateGroupKeywords(${i}, this.value)">${(g.keywords||[]).join('\n')}</textarea>
+      <div style="margin-bottom:4px;font-size:11px;color:var(--muted)">Pattern (regex, optional):</div>
+      <input type="text" placeholder="e.g. \\d{2}-\\d{5}-\\d{2}" value="${g.pattern||''}"
+        oninput="updateGroupPattern(${i}, this.value)"/>
+      <div class="toggle-row" style="margin-top:8px">
+        <label class="toggle">
+          <input type="checkbox" ${g.teamOnly?'checked':''} onchange="toggleTeamOnly(${i}, this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="toggle-label" style="font-size:11px">Match by team emails only</span>
+      </div>
+    `;
+    c.appendChild(block);
+  });
+}
+
+function addGroup() {
+  groups.push({ id: 'group_' + Date.now(), name: 'New Group', color: COLORS[groups.length % COLORS.length], keywords: [], pattern: null, teamOnly: false });
+  renderSettingsGroups();
+}
+
+function removeGroup(i) {
+  groups.splice(i, 1);
+  renderSettingsGroups();
+}
+
+function setGroupColor(i, color, el) {
+  groups[i].color = color;
+  el.closest('.settings-block').querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function updateGroupKeywords(i, val) {
+  groups[i].keywords = val.split('\n').map(s=>s.trim()).filter(Boolean);
+}
+
+function updateGroupPattern(i, val) {
+  groups[i].pattern = val.trim() || null;
+}
+
+function toggleTeamOnly(i, val) {
+  groups[i].teamOnly = val;
+}
+
+function addTeamMember() {
+  const input = document.getElementById('team-input');
+  const val = input.value.trim();
+  if (val && !teamMembers.includes(val)) {
+    teamMembers.push(val);
+    input.value = '';
+    renderTeamChips();
+  }
+}
+
+function renderTeamChips() {
+  const c = document.getElementById('team-chips');
+  c.innerHTML = teamMembers.map((m, i) => `
+    <span class="kw-chip">${m}<span class="rm" onclick="removeTeam(${i})">×</span></span>
+  `).join('');
+}
+
+function removeTeam(i) {
+  teamMembers.splice(i, 1);
+  renderTeamChips();
+}
+
+function saveSettings() {
+  localStorage.setItem('pto_groups', JSON.stringify(groups));
+  localStorage.setItem('pto_team', JSON.stringify(teamMembers));
+  const days = document.getElementById('default-days').value;
+  if (days) localStorage.setItem('pto_default_days', days);
+  toast('Settings saved!');
+  renderSettingsGroups();
+}
+
+// ═══════════════════════════════════════════════
+//  LOGIC TOGGLES
+// ═══════════════════════════════════════════════
+function setLogic(btn) {
+  const crit = btn.dataset.crit;
+  const val  = btn.dataset.val;
+  logicState[crit] = val;
+  btn.closest('.logic-toggle').querySelectorAll('.logic-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
