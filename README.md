@@ -1,7 +1,5 @@
 # PTO Return Assistant — Outlook Add-in
 
-**Version:** 1.0.0  
-**Author:** Jeremy Holen / DLR Group  
 **Platform:** Outlook Desktop for Windows (Microsoft 365)
 
 ---
