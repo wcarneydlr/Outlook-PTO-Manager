@@ -851,7 +851,14 @@ function fallbackCalDemo(personalEmail, fromStr, toStr, categories, keywords, co
   renderCalEvents(demo, personalEmail);
 }
 
+// Stores all loaded events for batch operations
+let _calEvents = [];
+let _calPersonalEmail = '';
+
 function renderCalEvents(events, personalEmail) {
+  _calEvents = events;
+  _calPersonalEmail = personalEmail;
+
   const container = document.getElementById('cal-container');
   container.innerHTML = '';
 
@@ -861,9 +868,29 @@ function renderCalEvents(events, personalEmail) {
     return;
   }
 
-  events.forEach(ev => {
+  // ── Batch toolbar ──
+  const toolbar = document.createElement('div');
+  toolbar.id = 'cal-toolbar';
+  toolbar.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:10;';
+  toolbar.innerHTML = `
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--muted);">
+      <input type="checkbox" id="cal-select-all" onchange="toggleSelectAll(this.checked)"
+        style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+      <span id="cal-select-label">Select all (${events.length})</span>
+    </label>
+    <div style="flex:1"></div>
+    <button class="btn btn-green btn-sm" id="cal-batch-btn" onclick="openAllSelected()" disabled
+      style="opacity:0.4;transition:opacity 0.2s;">
+      📨 Open Selected (0)
+    </button>
+  `;
+  container.appendChild(toolbar);
+
+  // ── Event cards ──
+  events.forEach((ev, idx) => {
     const card = document.createElement('div');
     card.className = 'cal-event-card';
+    card.style.cursor = 'default';
 
     const start = new Date(ev.Start.DateTime);
     const end   = new Date(ev.End.DateTime);
@@ -882,48 +909,107 @@ function renderCalEvents(events, personalEmail) {
     ].join('');
 
     card.innerHTML = `
-      <div class="cal-event-title">${badges}${ev.Subject || '(no title)'}</div>
-      <div class="cal-event-meta">
-        <span>📅 ${dateStr}</span>
-        <span>🕐 ${timeStr}</span>
-        ${ev.Location ? `<span>📍 ${ev.Location}</span>` : ''}
-        ${attendees.length ? `<span>👥 ${attendees.slice(0,3).join(', ')}${attendees.length>3?' +more':''}</span>` : ''}
-      </div>
-      <div class="cal-event-actions">
-        <button class="btn btn-green btn-sm" onclick="syncEvent(${JSON.stringify(ev).replace(/"/g,'&quot;')}, '${personalEmail}')">📨 Sync to Personal</button>
-        <button class="btn btn-ghost btn-sm" onclick="previewEvent(${JSON.stringify(ev).replace(/"/g,'&quot;')})">Preview</button>
+      <div style="display:flex;align-items:flex-start;gap:10px;">
+        <input type="checkbox" class="cal-check" data-idx="${idx}"
+          onchange="updateBatchBtn()"
+          style="accent-color:var(--accent);width:15px;height:15px;margin-top:2px;flex-shrink:0;cursor:pointer;">
+        <div style="flex:1;min-width:0;">
+          <div class="cal-event-title">${badges}${ev.Subject || '(no title)'}</div>
+          <div class="cal-event-meta">
+            <span>📅 ${dateStr}</span>
+            <span>🕐 ${timeStr}</span>
+            ${ev.Location ? `<span>📍 ${ev.Location}</span>` : ''}
+            ${attendees.length ? `<span>👥 ${attendees.slice(0,3).join(', ')}${attendees.length>3?` +${attendees.length-3} more`:''}</span>` : ''}
+          </div>
+        </div>
       </div>
     `;
+
+    // Clicking the card (not the checkbox) toggles selection
+    card.addEventListener('click', e => {
+      if (e.target.type === 'checkbox') return;
+      const cb = card.querySelector('.cal-check');
+      cb.checked = !cb.checked;
+      updateBatchBtn();
+    });
+
     container.appendChild(card);
   });
 }
 
-function syncEvent(ev, personalEmail) {
-  // Create a new meeting request to personal email
-  const start = new Date(ev.Start.DateTime);
-  const end   = new Date(ev.End.DateTime);
+function toggleSelectAll(checked) {
+  document.querySelectorAll('.cal-check').forEach(cb => cb.checked = checked);
+  updateBatchBtn();
+}
+
+function updateBatchBtn() {
+  const checked = [...document.querySelectorAll('.cal-check:checked')];
+  const total   = document.querySelectorAll('.cal-check').length;
+  const btn     = document.getElementById('cal-batch-btn');
+  const allBox  = document.getElementById('cal-select-all');
+  const label   = document.getElementById('cal-select-label');
+
+  btn.textContent = `📨 Open Selected (${checked.length})`;
+  btn.disabled    = checked.length === 0;
+  btn.style.opacity = checked.length === 0 ? '0.4' : '1';
+
+  allBox.indeterminate = checked.length > 0 && checked.length < total;
+  allBox.checked = checked.length === total;
+  label.textContent = `Select all (${total})`;
+}
+
+function openAllSelected() {
+  const checked = [...document.querySelectorAll('.cal-check:checked')];
+  if (checked.length === 0) return;
+
+  const personalEmail = _calPersonalEmail;
+  if (!personalEmail) { toast('Personal email not set.'); return; }
+
+  // Open forms one at a time with a short delay so Outlook can handle them
+  let i = 0;
+  function openNext() {
+    if (i >= checked.length) {
+      toast(`Opened ${checked.length} invite${checked.length > 1 ? 's' : ''} — review each and click Send.`);
+      return;
+    }
+    const idx = parseInt(checked[i].dataset.idx);
+    const ev  = _calEvents[idx];
+    openInviteForm(ev, personalEmail);
+    i++;
+    setTimeout(openNext, 800); // stagger so Outlook doesn't drop forms
+  }
+  openNext();
+}
+
+function openInviteForm(ev, personalEmail) {
+  const start     = new Date(ev.Start.DateTime);
+  const end       = new Date(ev.End.DateTime);
   const attendees = (ev.Attendees || []).map(a => a.EmailAddress?.Name || '').filter(Boolean);
-  const joinUrl = extractJoinUrl(ev);
+  const joinUrl   = extractJoinUrl(ev);
 
   const body = [
-    `Synced from work calendar.`,
-    ``,
+    'Synced from work calendar.',
+    '',
     `Original attendees: ${attendees.join(', ') || 'N/A'}`,
     joinUrl ? `Join link: ${joinUrl}` : '',
-    ``,
+    '',
     ev.BodyPreview || ''
   ].filter(l => l !== null).join('\n');
 
   Office.context.mailbox.displayNewAppointmentForm({
     requiredAttendees: [personalEmail],
     optionalAttendees: [],
-    start: start,
-    end: end,
+    start,
+    end,
     location: ev.Location || '',
-    subject: ev.Subject || '',
-    body: body
+    subject:  ev.Subject  || '',
+    body
   });
+}
 
+// Keep single-event sync for backwards compat
+function syncEvent(ev, personalEmail) {
+  openInviteForm(ev, personalEmail);
   toast('Event opened — review and Send to sync to your personal calendar!');
 }
 

@@ -10,11 +10,11 @@
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="PTO Return Assistant"/>
   <Description DefaultValue="Triage emails and sync calendar events after PTO"/>
-  <IconUrl DefaultValue="https://YOUR_HOSTING_URL/assets/icon-64.png"/>
-  <HighResolutionIconUrl DefaultValue="https://YOUR_HOSTING_URL/assets/icon-128.png"/>
-  <SupportUrl DefaultValue="https://YOUR_HOSTING_URL"/>
+  <IconUrl DefaultValue="https://wcarneydlr.github.io/Outlook-PTO-Manager/assets/icon-64.png"/>
+  <HighResolutionIconUrl DefaultValue="https://wcarneydlr.github.io/Outlook-PTO-Manager/assets/icon-128.png"/>
+  <SupportUrl DefaultValue="https://wcarneydlr.github.io/Outlook-PTO-Manager"/>
   <AppDomains>
-    <AppDomain>https://YOUR_HOSTING_URL</AppDomain>
+    <AppDomain>https://wcarneydlr.github.io/Outlook-PTO-Manager</AppDomain>
   </AppDomains>
   <Hosts>
     <Host Name="Mailbox"/>
@@ -27,7 +27,7 @@
   <FormSettings>
     <Form xsi:type="ItemRead">
       <DesktopSettings>
-        <SourceLocation DefaultValue="https://YOUR_HOSTING_URL/taskpane.html"/>
+        <SourceLocation DefaultValue="https://wcarneydlr.github.io/Outlook-PTO-Manager/taskpane.html"/>
         <RequestedHeight>450</RequestedHeight>
       </DesktopSettings>
     </Form>
@@ -75,13 +75,13 @@
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="https://YOUR_HOSTING_URL/assets/icon-16.png"/>
-        <bt:Image id="Icon.32x32" DefaultValue="https://YOUR_HOSTING_URL/assets/icon-32.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="https://YOUR_HOSTING_URL/assets/icon-80.png"/>
+        <bt:Image id="Icon.16x16" DefaultValue="https://wcarneydlr.github.io/Outlook-PTO-Manager/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://wcarneydlr.github.io/Outlook-PTO-Manager/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://wcarneydlr.github.io/Outlook-PTO-Manager/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="Commands.Url" DefaultValue="https://YOUR_HOSTING_URL/commands.html"/>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://YOUR_HOSTING_URL/taskpane.html"/>
+        <bt:Url id="Commands.Url" DefaultValue="https://wcarneydlr.github.io/Outlook-PTO-Manager/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://wcarneydlr.github.io/Outlook-PTO-Manager/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GroupLabel" DefaultValue="PTO Return"/>
