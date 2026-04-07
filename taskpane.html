@@ -719,8 +719,8 @@ function renderSyncProfiles() {
 
       <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
         <span style="font-size:11px;color:var(--muted);width:70px;flex-shrink:0;">Date Range</span>
-        <input type="date" value="${fromVal}" style="flex:1;" onchange="syncProfiles[${i}].dateFrom=this.value"/>
-        <input type="date" value="${toVal}"   style="flex:1;" onchange="syncProfiles[${i}].dateTo=this.value"/>
+        <input type="date" id="sp-from-${i}" value="${fromVal}" style="flex:1;" onchange="syncProfiles[${i}].dateFrom=this.value"/>
+        <input type="date" id="sp-to-${i}"   value="${toVal}"   style="flex:1;" onchange="syncProfiles[${i}].dateTo=this.value"/>
       </div>
 
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
@@ -856,6 +856,12 @@ let _calPersonalEmail = '';
 let _activeSyncProfile = null;
 
 function runSyncProfile(i) {
+  // Read date values directly from named inputs — onchange may not have fired if user hasn't touched them
+  const fromEl = document.getElementById(`sp-from-${i}`);
+  const toEl   = document.getElementById(`sp-to-${i}`);
+  if (fromEl) syncProfiles[i].dateFrom = fromEl.value;
+  if (toEl)   syncProfiles[i].dateTo   = toEl.value;
+
   const sp = syncProfiles[i];
   _activeSyncProfile = sp;
 
