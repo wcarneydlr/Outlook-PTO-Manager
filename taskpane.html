@@ -914,11 +914,22 @@ function runSyncProfile(i) {
   document.getElementById('cal-loading').style.display = 'block';
   document.getElementById('cal-container').innerHTML = '';
 
+  // Get primary mailbox address to scope EWS to default calendar only
+  const primaryEmail = Office.context.mailbox.userProfile.emailAddress;
+
   // EWS works with basic sideloaded add-ins — no REST token or VersionOverrides needed
   const ewsRequest = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
                xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"
                xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages">
+  <soap:Header>
+    <t:RequestServerVersion Version="Exchange2013"/>
+    <t:ExchangeImpersonation>
+      <t:ConnectingSID>
+        <t:PrimarySmtpAddress>${primaryEmail}</t:PrimarySmtpAddress>
+      </t:ConnectingSID>
+    </t:ExchangeImpersonation>
+  </soap:Header>
   <soap:Body>
     <m:FindItem Traversal="Shallow">
       <m:ItemShape>
@@ -928,7 +939,11 @@ function runSyncProfile(i) {
         StartDate="${sp.dateFrom}T00:00:00Z"
         EndDate="${sp.dateTo}T23:59:59Z"/>
       <m:ParentFolderIds>
-        <t:DistinguishedFolderId Id="calendar"/>
+        <t:DistinguishedFolderId Id="calendar">
+          <t:Mailbox>
+            <t:EmailAddress>${primaryEmail}</t:EmailAddress>
+          </t:Mailbox>
+        </t:DistinguishedFolderId>
       </m:ParentFolderIds>
     </m:FindItem>
   </soap:Body>
@@ -938,7 +953,7 @@ function runSyncProfile(i) {
     document.getElementById('cal-loading').style.display = 'none';
 
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
-      showCalError(`EWS request failed: ${result.error?.message || 'Unknown error'}.<br>Make sure you are connected to Exchange/M365.`);
+      showCalError(`EWS request failed: ${result.error?.message || 'Unknown error'}.<br><br>Make sure you are signed into Exchange/M365 in Outlook and try again.`);
       return;
     }
 
