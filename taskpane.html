@@ -752,7 +752,76 @@ function openEmail(id) {
 
 // ═══════════════════════════════════════════════
 //  FEATURE 2: CALENDAR SYNC
+//  Reads ONLY from the /calendarview endpoint.
+//  Completely isolated from email group rules.
 // ═══════════════════════════════════════════════
+
+const CONF_PATTERNS = [
+  /teams\.microsoft\.com/i,
+  /zoom\.us/i,
+  /meet\.google\.com/i,
+  /webex\.com/i,
+  /gotomeeting\.com/i,
+  /whereby\.com/i
+];
+
+function hasConferenceLink(ev) {
+  const body = ev.Body?.Content || ev.BodyPreview || ev.Location || '';
+  return CONF_PATTERNS.some(p => p.test(body)) || !!ev.OnlineMeeting?.joinUrl;
+}
+
+function extractConferenceType(ev) {
+  const body = (ev.Body?.Content || ev.BodyPreview || ev.Location || '');
+  if (/teams\.microsoft\.com/i.test(body) || ev.OnlineMeeting?.joinUrl) return 'teams';
+  if (/zoom\.us/i.test(body)) return 'zoom';
+  if (/meet\.google\.com/i.test(body)) return 'meet';
+  if (/webex\.com/i.test(body)) return 'webex';
+  return 'conference';
+}
+
+function extractJoinUrl(ev) {
+  if (ev.OnlineMeeting?.joinUrl) return ev.OnlineMeeting.joinUrl;
+  const body = ev.Body?.Content || ev.BodyPreview || '';
+  const m = body.match(/https?:\/\/[^\s"<>]*?(teams\.microsoft\.com|zoom\.us|meet\.google\.com|webex\.com)[^\s"<>]*/i);
+  return m ? m[0] : null;
+}
+
+// Pure calendar criteria — no email group logic involved
+function calEventMatchesCriteria(ev, criteria) {
+  const { confEnabled, confLogic, categories, catLogic, keywords, kwLogic } = criteria;
+
+  // Collect which enabled criteria are met
+  const results = [];
+
+  if (confEnabled) {
+    results.push({ logic: confLogic, met: hasConferenceLink(ev) });
+  }
+
+  if (categories.length > 0) {
+    const evCats = (ev.Categories || []).map(c => c.toLowerCase());
+    const met = categories.some(c => evCats.some(ec => ec.includes(c.toLowerCase())));
+    results.push({ logic: catLogic, met });
+  }
+
+  if (keywords.length > 0) {
+    const title = (ev.Subject || '').toLowerCase();
+    const met = keywords.some(k => title.includes(k));
+    results.push({ logic: kwLogic, met });
+  }
+
+  // If no criteria are enabled, show all events
+  if (results.length === 0) return true;
+
+  // AND criteria must ALL be met; OR criteria need at least one met
+  const andResults = results.filter(r => r.logic === 'AND');
+  const orResults  = results.filter(r => r.logic === 'OR');
+
+  const andPasses = andResults.length === 0 || andResults.every(r => r.met);
+  const orPasses  = orResults.length  === 0 || orResults.some(r => r.met);
+
+  return andPasses && orPasses;
+}
+
 function loadCalendar() {
   const personalEmail = document.getElementById('personal-email').value.trim();
   if (!personalEmail) { toast('Please enter your personal email address first.'); return; }
@@ -760,9 +829,17 @@ function loadCalendar() {
 
   const fromStr = document.getElementById('crit-cal-from').value;
   const toStr   = document.getElementById('crit-cal-to').value;
-  const categories = document.getElementById('crit-categories').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const keywords   = document.getElementById('crit-keywords').value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
-  const confEnabled = document.getElementById('crit-conf').checked;
+  if (!fromStr || !toStr) { toast('Please set a date range.'); return; }
+
+  // Build criteria object — completely separate from email group settings
+  const criteria = {
+    confEnabled: document.getElementById('crit-conf').checked,
+    confLogic:   logicState['conf'],
+    categories:  document.getElementById('crit-categories').value.split(',').map(s => s.trim()).filter(Boolean),
+    catLogic:    logicState['cat'],
+    keywords:    document.getElementById('crit-keywords').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+    kwLogic:     logicState['kw'],
+  };
 
   document.getElementById('cal-empty').style.display = 'none';
   document.getElementById('cal-loading').style.display = 'block';
@@ -770,85 +847,70 @@ function loadCalendar() {
 
   Office.context.mailbox.getCallbackTokenAsync({ isRest: true }, function(result) {
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
-      fallbackCalDemo(personalEmail, fromStr, toStr, categories, keywords, confEnabled);
+      showCalError('Could not get calendar access token. Try reopening the add-in.');
       return;
     }
-    const token = result.value;
-    const base = Office.context.mailbox.restUrl;
-    const filter = `Start/DateTime ge '${fromStr}T00:00:00' and End/DateTime le '${toStr}T23:59:59'`;
-    const select = 'Subject,Start,End,Location,BodyPreview,Attendees,OnlineMeeting,Categories,Id,Body,Organizer';
-    const url = `${base}/v2.0/me/calendarview?startDateTime=${fromStr}T00:00:00Z&endDateTime=${toStr}T23:59:59Z&$select=${select}&$top=50`;
 
-    fetch(url, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json', Prefer: 'outlook.timezone="UTC"' } })
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById('cal-loading').style.display = 'none';
-        const events = (data.value || []).filter(ev =>
-          matchesCalCriteria(ev, confEnabled, categories, keywords, fromStr, toStr)
-        );
-        renderCalEvents(events, personalEmail);
-      })
-      .catch(() => fallbackCalDemo(personalEmail, fromStr, toStr, categories, keywords, confEnabled));
+    const token   = result.value;
+    const base    = Office.context.mailbox.restUrl;
+    // /calendarview returns only YOUR calendar events in the date range
+    // This is the correct endpoint — not messages, not shared calendars
+    const url = `${base}/v2.0/me/calendarview`
+      + `?startDateTime=${fromStr}T00:00:00Z`
+      + `&endDateTime=${toStr}T23:59:59Z`
+      + `&$select=Subject,Start,End,Location,BodyPreview,Body,Attendees,OnlineMeeting,Categories,Id,Organizer,IsOrganizer`
+      + `&$top=100`
+      + `&$orderby=Start/DateTime`;
+
+    fetch(url, {
+      headers: {
+        Authorization: 'Bearer ' + token,
+        Accept: 'application/json',
+        Prefer: `outlook.timezone="${Intl.DateTimeFormat().resolvedOptions().timeZone}"`
+      }
+    })
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then(data => {
+      document.getElementById('cal-loading').style.display = 'none';
+
+      const allEvents = data.value || [];
+      if (allEvents.length === 0) {
+        showCalEmpty('No calendar events found in this date range.');
+        return;
+      }
+
+      // Filter using ONLY calendar criteria — email groups not involved
+      const matched = allEvents.filter(ev => calEventMatchesCriteria(ev, criteria));
+
+      if (matched.length === 0) {
+        showCalEmpty(`Found ${allEvents.length} events in range but none matched your criteria.<br>Try loosening the filters.`);
+        return;
+      }
+
+      renderCalEvents(matched, personalEmail);
+    })
+    .catch(err => {
+      document.getElementById('cal-loading').style.display = 'none';
+      showCalError(`Calendar fetch failed: ${err.message}.<br>Try closing and reopening the add-in.`);
+    });
   });
 }
 
-const CONF_PATTERNS = [/teams\.microsoft\.com/i, /zoom\.us/i, /meet\.google\.com/i, /webex\.com/i, /gotomeeting\.com/i];
-
-function hasConferenceLink(ev) {
-  const body = (ev.Body?.Content || ev.BodyPreview || '');
-  return CONF_PATTERNS.some(p => p.test(body)) || !!ev.OnlineMeeting?.joinUrl;
+function showCalEmpty(msg) {
+  const el = document.getElementById('cal-empty');
+  el.style.display = 'flex';
+  el.querySelector('.empty-text').innerHTML = msg;
 }
 
-function extractConferenceType(ev) {
-  const body = ev.Body?.Content || ev.BodyPreview || '';
-  if (/teams\.microsoft\.com/i.test(body) || ev.OnlineMeeting?.joinUrl) return 'teams';
-  if (/zoom\.us/i.test(body)) return 'zoom';
-  if (/meet\.google\.com/i.test(body)) return 'meet';
-  return 'conference';
-}
-
-function extractJoinUrl(ev) {
-  if (ev.OnlineMeeting?.joinUrl) return ev.OnlineMeeting.joinUrl;
-  const body = ev.Body?.Content || ev.BodyPreview || '';
-  const m = body.match(/https?:\/\/(teams\.microsoft\.com|zoom\.us|meet\.google\.com)[^\s"<>]+/i);
-  return m ? m[0] : null;
-}
-
-function matchesCalCriteria(ev, confEnabled, categories, keywords, fromStr, toStr) {
-  const criteriaMet = [];
-
-  if (confEnabled) {
-    criteriaMet.push({ crit: 'conf', met: hasConferenceLink(ev) });
-  }
-  if (categories.length > 0) {
-    const evCats = ev.Categories || [];
-    criteriaMet.push({ crit: 'cat', met: categories.some(c => evCats.some(ec => ec.toLowerCase().includes(c.toLowerCase()))) });
-  }
-  if (keywords.length > 0) {
-    const title = (ev.Subject || '').toLowerCase();
-    criteriaMet.push({ crit: 'kw', met: keywords.some(k => title.includes(k)) });
-  }
-  if (fromStr && toStr) {
-    criteriaMet.push({ crit: 'time', met: true }); // already filtered by API
-  }
-
-  if (criteriaMet.length === 0) return true;
-
-  // Each criteria uses its own AND/OR logic vs the others
-  // For now: if any enabled criteria is met, include (OR across criteria groups)
-  return criteriaMet.some(c => {
-    if (logicState[c.crit] === 'AND') return c.met;
-    return c.met;
-  });
-}
-
-function fallbackCalDemo(personalEmail, fromStr, toStr, categories, keywords, confEnabled) {
+function showCalError(msg) {
   document.getElementById('cal-loading').style.display = 'none';
-  const demo = [
-    { Subject: 'Project Kickoff - 26-45123-01', Start:{ DateTime: '2026-04-08T09:00:00' }, End:{ DateTime:'2026-04-08T10:00:00' }, Location:'Teams', BodyPreview:'Join us for the kickoff meeting. Teams link: https://teams.microsoft.com/l/meetup-join/abc123', Attendees:[{EmailAddress:{Name:'Andy Wallace'}},{EmailAddress:{Name:'Devin Brown'}}], Categories:['Client'], Id:'cal1', OnlineMeeting:{ joinUrl:'https://teams.microsoft.com/l/meetup-join/abc123' } },
-    { Subject: 'Software Renewal Review', Start:{ DateTime:'2026-04-09T14:00:00' }, End:{ DateTime:'2026-04-09T15:00:00' }, Location:'Zoom', BodyPreview:'Quarterly review of software renewals. Zoom: https://zoom.us/j/9876543210', Attendees:[{EmailAddress:{Name:'Brian Myers'}}], Categories:['Internal'], Id:'cal2', OnlineMeeting:null },
-  ];
-  renderCalEvents(demo, personalEmail);
+  const el = document.getElementById('cal-empty');
+  el.style.display = 'flex';
+  el.querySelector('.empty-icon').textContent = '⚠️';
+  el.querySelector('.empty-text').innerHTML = msg;
 }
 
 // Stores all loaded events for batch operations
