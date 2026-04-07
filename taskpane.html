@@ -374,69 +374,12 @@
     <input type="text" id="personal-email" placeholder="you@hotmail.com" />
   </div>
 
-  <div class="section-label">Sync Criteria</div>
-  <div class="criteria-block">
-
-    <!-- Web conference toggle -->
-    <div class="criteria-row">
-      <div class="criteria-label">Conference</div>
-      <div class="criteria-controls">
-        <div class="toggle-row">
-          <label class="toggle">
-            <input type="checkbox" id="crit-conf" checked>
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-label">Has Teams / Zoom / Meet link</span>
-        </div>
-      </div>
-      <div class="logic-toggle">
-        <button class="logic-btn active" data-crit="conf" data-val="OR" onclick="setLogic(this)">OR</button>
-        <button class="logic-btn" data-crit="conf" data-val="AND" onclick="setLogic(this)">AND</button>
-      </div>
-    </div>
-
-    <!-- Categories -->
-    <div class="criteria-row">
-      <div class="criteria-label">Categories</div>
-      <div class="criteria-controls">
-        <input type="text" id="crit-categories" placeholder="e.g. Client, Travel, Important (comma-separated)"/>
-      </div>
-      <div class="logic-toggle">
-        <button class="logic-btn active" data-crit="cat" data-val="OR" onclick="setLogic(this)">OR</button>
-        <button class="logic-btn" data-crit="cat" data-val="AND" onclick="setLogic(this)">AND</button>
-      </div>
-    </div>
-
-    <!-- Time range -->
-    <div class="criteria-row">
-      <div class="criteria-label">Time Range</div>
-      <div class="criteria-controls" style="display:flex; gap:6px;">
-        <input type="date" id="crit-cal-from"/>
-        <input type="date" id="crit-cal-to"/>
-      </div>
-      <div class="logic-toggle">
-        <button class="logic-btn active" data-crit="time" data-val="OR" onclick="setLogic(this)">OR</button>
-        <button class="logic-btn" data-crit="time" data-val="AND" onclick="setLogic(this)">AND</button>
-      </div>
-    </div>
-
-    <!-- Keywords -->
-    <div class="criteria-row">
-      <div class="criteria-label">Keywords</div>
-      <div class="criteria-controls">
-        <input type="text" id="crit-keywords" placeholder="e.g. kickoff, review, standup (comma-separated)"/>
-      </div>
-      <div class="logic-toggle">
-        <button class="logic-btn active" data-crit="kw" data-val="OR" onclick="setLogic(this)">OR</button>
-        <button class="logic-btn" data-crit="kw" data-val="AND" onclick="setLogic(this)">AND</button>
-      </div>
-    </div>
-
+  <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;padding-right:14px;">
+    <span>Sync Profiles</span>
+    <button class="btn btn-primary btn-sm" onclick="addSyncProfile()">+ New Profile</button>
   </div>
 
-  <div class="ctrl-row">
-    <button class="btn btn-primary" style="flex:1" onclick="loadCalendar()">Scan Calendar Events</button>
-  </div>
+  <div id="sync-profiles-container"></div>
 
   <div id="cal-loading" style="display:none">
     <div class="loading-dots"><span></span><span></span><span></span></div>
@@ -446,7 +389,7 @@
 
   <div id="cal-empty" class="empty-state">
     <div class="empty-icon">📅</div>
-    <div class="empty-text">Configure criteria and scan<br>to find events to sync.</div>
+    <div class="empty-text">Add a sync profile and click<br><strong>Scan</strong> to find events.</div>
   </div>
 </div>
 
@@ -488,27 +431,25 @@
 //  STATE
 // ═══════════════════════════════════════════════
 const DEFAULT_GROUPS = [
-  {
-    id: 'renewals', name: 'Software Renewals', color: '#4f8ef7',
-    keywords: ['Renewal','Quote','Purchase Order','PO'],
-    pattern: null, teamOnly: false
-  },
-  {
-    id: 'projects', name: 'DLR Projects', color: '#3ecf8e',
-    keywords: [],
-    pattern: /\b\d{2}-\d{5}-\d{2}\b/, teamOnly: false
-  },
-  {
-    id: 'team', name: 'My Team', color: '#f5c542',
-    keywords: [],
-    pattern: null, teamOnly: true
-  }
+  { id: 'renewals', name: 'Software Renewals', color: '#4f8ef7', keywords: ['Renewal','Quote','Purchase Order','PO'], pattern: null, teamOnly: false },
+  { id: 'projects', name: 'DLR Projects',      color: '#3ecf8e', keywords: [], pattern: /\b\d{2}-\d{5}-\d{2}\b/, teamOnly: false },
+  { id: 'team',     name: 'My Team',            color: '#f5c542', keywords: [], pattern: null, teamOnly: true }
 ];
 
-let groups = JSON.parse(localStorage.getItem('pto_groups') || 'null') || DEFAULT_GROUPS.map(g => ({...g, pattern: g.pattern ? g.pattern.source : null}));
-let teamMembers = JSON.parse(localStorage.getItem('pto_team') || '[]');
-let logicState = { conf: 'OR', cat: 'OR', time: 'OR', kw: 'OR' };
-const COLORS = ['#4f8ef7','#3ecf8e','#f5c542','#f06464','#b07df5','#f5a052','#4fc4cf'];
+const DEFAULT_SYNC_PROFILES = [
+  { id: 'sp_default', name: 'All Meetings w/ Links', color: '#4f8ef7',
+    confEnabled: true, confLogic: 'OR',
+    categories: '', catLogic: 'OR',
+    keywords: '',    kwLogic: 'OR',
+    dateFrom: '', dateTo: '',
+    collapsed: false }
+];
+
+let groups       = JSON.parse(localStorage.getItem('pto_groups') || 'null') || DEFAULT_GROUPS.map(g => ({...g, pattern: g.pattern ? g.pattern.source : null}));
+let teamMembers  = JSON.parse(localStorage.getItem('pto_team')   || '[]');
+let syncProfiles = JSON.parse(localStorage.getItem('pto_sync_profiles') || 'null') || DEFAULT_SYNC_PROFILES;
+let logicState   = { conf: 'OR', cat: 'OR', time: 'OR', kw: 'OR' };
+const COLORS     = ['#4f8ef7','#3ecf8e','#f5c542','#f06464','#b07df5','#f5a052','#4fc4cf'];
 
 // ═══════════════════════════════════════════════
 //  OFFICE INIT
@@ -519,6 +460,7 @@ Office.onReady(function(info) {
     renderSettingsGroups();
     renderTeamChips();
     loadSavedPersonalEmail();
+    renderSyncProfiles();
   }
 });
 
@@ -528,11 +470,6 @@ function initDates() {
   const from = new Date(today); from.setDate(from.getDate() - daysBack);
   document.getElementById('date-from').value = toDateInput(from);
   document.getElementById('date-to').value = toDateInput(today);
-
-  document.getElementById('crit-cal-from').value = toDateInput(today);
-  const calTo = new Date(today); calTo.setDate(calTo.getDate() + 30);
-  document.getElementById('crit-cal-to').value = toDateInput(calTo);
-
   const days = localStorage.getItem('pto_default_days');
   if (days) document.getElementById('default-days').value = days;
 }
@@ -725,14 +662,15 @@ function buildGroupCard(name, color, emails) {
 
     item.innerHTML = `
       <div class="email-from"><span>${from}</span><span>${dateStr}</span></div>
-      <div class="email-subject">${email.Subject || '(no subject)'}</div>
+      <div class="email-subject" style="cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:2px;"
+           onclick="event.stopPropagation();openEmail('${email.Id}')">${email.Subject || '(no subject)'}</div>
       <div class="email-preview">${email.BodyPreview || ''}</div>
       <div class="email-tags">
         ${hasAsk ? '<span class="etag ask">❓ action needed</span>' : ''}
         ${isCC ? '<span class="etag cc">CC</span>' : ''}
       </div>
     `;
-    item.onclick = () => openEmail(email.Id);
+    item.style.cursor = 'default';
     list.appendChild(item);
   });
 
@@ -751,9 +689,111 @@ function openEmail(id) {
 }
 
 // ═══════════════════════════════════════════════
+//  SYNC PROFILES UI
+// ═══════════════════════════════════════════════
+function renderSyncProfiles() {
+  const c = document.getElementById('sync-profiles-container');
+  c.innerHTML = '';
+  const today = toDateInput(new Date());
+  const nextMonth = toDateInput(new Date(Date.now() + 30*24*60*60*1000));
+
+  syncProfiles.forEach((sp, i) => {
+    const block = document.createElement('div');
+    block.className = 'criteria-block';
+    block.style.marginBottom = '8px';
+
+    const fromVal = sp.dateFrom || today;
+    const toVal   = sp.dateTo   || nextMonth;
+
+    block.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="width:10px;height:10px;border-radius:50%;background:${sp.color};flex-shrink:0;"></span>
+        <input type="text" value="${sp.name}" style="flex:1;font-weight:600;font-size:13px;background:transparent;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:2px 0;"
+          onchange="syncProfiles[${i}].name=this.value"/>
+        <div style="display:flex;gap:4px;">
+          ${COLORS.map(col => `<span style="width:12px;height:12px;border-radius:50%;background:${col};cursor:pointer;border:2px solid ${col===sp.color?'#fff':'transparent'};flex-shrink:0;"
+            onclick="setSyncColor(${i},'${col}',this)"></span>`).join('')}
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="removeSyncProfile(${i})" style="color:var(--red);border-color:var(--red);padding:3px 7px;">✕</button>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+        <span style="font-size:11px;color:var(--muted);width:70px;flex-shrink:0;">Date Range</span>
+        <input type="date" value="${fromVal}" style="flex:1;" onchange="syncProfiles[${i}].dateFrom=this.value"/>
+        <input type="date" value="${toVal}"   style="flex:1;" onchange="syncProfiles[${i}].dateTo=this.value"/>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="font-size:11px;color:var(--muted);width:70px;flex-shrink:0;">Conference</span>
+        <label class="toggle" style="flex-shrink:0;">
+          <input type="checkbox" ${sp.confEnabled?'checked':''} onchange="syncProfiles[${i}].confEnabled=this.checked">
+          <span class="toggle-slider"></span>
+        </label>
+        <span style="font-size:11px;color:var(--text);flex:1;">Has Teams/Zoom/Meet link</span>
+        <button class="logic-btn ${sp.confLogic==='OR'?'active':''}" onclick="setSyncLogic(${i},'conf','OR',this)">OR</button>
+        <button class="logic-btn ${sp.confLogic==='AND'?'active':''}" onclick="setSyncLogic(${i},'conf','AND',this)">AND</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="font-size:11px;color:var(--muted);width:70px;flex-shrink:0;">Categories</span>
+        <input type="text" value="${sp.categories}" placeholder="Client, Travel…" style="flex:1;font-size:11px;"
+          onchange="syncProfiles[${i}].categories=this.value"/>
+        <button class="logic-btn ${sp.catLogic==='OR'?'active':''}" onclick="setSyncLogic(${i},'cat','OR',this)">OR</button>
+        <button class="logic-btn ${sp.catLogic==='AND'?'active':''}" onclick="setSyncLogic(${i},'cat','AND',this)">AND</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:11px;color:var(--muted);width:70px;flex-shrink:0;">Keywords</span>
+        <input type="text" value="${sp.keywords}" placeholder="kickoff, review…" style="flex:1;font-size:11px;"
+          onchange="syncProfiles[${i}].keywords=this.value"/>
+        <button class="logic-btn ${sp.kwLogic==='OR'?'active':''}" onclick="setSyncLogic(${i},'kw','OR',this)">OR</button>
+        <button class="logic-btn ${sp.kwLogic==='AND'?'active':''}" onclick="setSyncLogic(${i},'kw','AND',this)">AND</button>
+      </div>
+
+      <button class="btn btn-primary" style="width:100%;font-size:12px;" onclick="runSyncProfile(${i})">
+        🔍 Scan "${sp.name}"
+      </button>
+    `;
+    c.appendChild(block);
+  });
+
+  // Save profiles to localStorage whenever re-rendered
+  localStorage.setItem('pto_sync_profiles', JSON.stringify(syncProfiles));
+}
+
+function addSyncProfile() {
+  const today     = toDateInput(new Date());
+  const nextMonth = toDateInput(new Date(Date.now() + 30*24*60*60*1000));
+  syncProfiles.push({
+    id: 'sp_' + Date.now(),
+    name: 'New Profile',
+    color: COLORS[syncProfiles.length % COLORS.length],
+    confEnabled: true, confLogic: 'OR',
+    categories: '',    catLogic: 'OR',
+    keywords: '',      kwLogic: 'OR',
+    dateFrom: today,   dateTo: nextMonth
+  });
+  renderSyncProfiles();
+}
+
+function removeSyncProfile(i) {
+  syncProfiles.splice(i, 1);
+  renderSyncProfiles();
+}
+
+function setSyncColor(i, color, el) {
+  syncProfiles[i].color = color;
+  renderSyncProfiles();
+}
+
+function setSyncLogic(i, field, val, btn) {
+  syncProfiles[i][field + 'Logic'] = val;
+  btn.closest('div').querySelectorAll('.logic-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════
 //  FEATURE 2: CALENDAR SYNC
-//  Reads ONLY from the /calendarview endpoint.
-//  Completely isolated from email group rules.
 // ═══════════════════════════════════════════════
 
 const CONF_PATTERNS = [
@@ -771,7 +811,7 @@ function hasConferenceLink(ev) {
 }
 
 function extractConferenceType(ev) {
-  const body = (ev.Body?.Content || ev.BodyPreview || ev.Location || '');
+  const body = ev.Body?.Content || ev.BodyPreview || ev.Location || '';
   if (/teams\.microsoft\.com/i.test(body) || ev.OnlineMeeting?.joinUrl) return 'teams';
   if (/zoom\.us/i.test(body)) return 'zoom';
   if (/meet\.google\.com/i.test(body)) return 'meet';
@@ -786,60 +826,44 @@ function extractJoinUrl(ev) {
   return m ? m[0] : null;
 }
 
-// Pure calendar criteria — no email group logic involved
-function calEventMatchesCriteria(ev, criteria) {
-  const { confEnabled, confLogic, categories, catLogic, keywords, kwLogic } = criteria;
+function calEventMatchesCriteria(ev, sp) {
+  const categories = sp.categories.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const keywords   = sp.keywords.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const results    = [];
 
-  // Collect which enabled criteria are met
-  const results = [];
-
-  if (confEnabled) {
-    results.push({ logic: confLogic, met: hasConferenceLink(ev) });
+  if (sp.confEnabled) {
+    results.push({ logic: sp.confLogic, met: hasConferenceLink(ev) });
   }
-
   if (categories.length > 0) {
     const evCats = (ev.Categories || []).map(c => c.toLowerCase());
-    const met = categories.some(c => evCats.some(ec => ec.includes(c.toLowerCase())));
-    results.push({ logic: catLogic, met });
+    results.push({ logic: sp.catLogic, met: categories.some(c => evCats.some(ec => ec.includes(c))) });
   }
-
   if (keywords.length > 0) {
     const title = (ev.Subject || '').toLowerCase();
-    const met = keywords.some(k => title.includes(k));
-    results.push({ logic: kwLogic, met });
+    results.push({ logic: sp.kwLogic, met: keywords.some(k => title.includes(k)) });
   }
 
-  // If no criteria are enabled, show all events
   if (results.length === 0) return true;
 
-  // AND criteria must ALL be met; OR criteria need at least one met
   const andResults = results.filter(r => r.logic === 'AND');
   const orResults  = results.filter(r => r.logic === 'OR');
-
-  const andPasses = andResults.length === 0 || andResults.every(r => r.met);
-  const orPasses  = orResults.length  === 0 || orResults.some(r => r.met);
-
-  return andPasses && orPasses;
+  return (andResults.length === 0 || andResults.every(r => r.met)) &&
+         (orResults.length  === 0 || orResults.some(r => r.met));
 }
 
-function loadCalendar() {
+let _calEvents = [];
+let _calPersonalEmail = '';
+let _activeSyncProfile = null;
+
+function runSyncProfile(i) {
+  const sp = syncProfiles[i];
+  _activeSyncProfile = sp;
+
   const personalEmail = document.getElementById('personal-email').value.trim();
-  if (!personalEmail) { toast('Please enter your personal email address first.'); return; }
+  if (!personalEmail) { toast('Enter your personal email at the top first.'); return; }
   localStorage.setItem('pto_personal_email', personalEmail);
 
-  const fromStr = document.getElementById('crit-cal-from').value;
-  const toStr   = document.getElementById('crit-cal-to').value;
-  if (!fromStr || !toStr) { toast('Please set a date range.'); return; }
-
-  // Build criteria object — completely separate from email group settings
-  const criteria = {
-    confEnabled: document.getElementById('crit-conf').checked,
-    confLogic:   logicState['conf'],
-    categories:  document.getElementById('crit-categories').value.split(',').map(s => s.trim()).filter(Boolean),
-    catLogic:    logicState['cat'],
-    keywords:    document.getElementById('crit-keywords').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
-    kwLogic:     logicState['kw'],
-  };
+  if (!sp.dateFrom || !sp.dateTo) { toast('Set a date range in the profile first.'); return; }
 
   document.getElementById('cal-empty').style.display = 'none';
   document.getElementById('cal-loading').style.display = 'block';
@@ -847,18 +871,16 @@ function loadCalendar() {
 
   Office.context.mailbox.getCallbackTokenAsync({ isRest: true }, function(result) {
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
-      showCalError('Could not get calendar access token. Try reopening the add-in.');
+      showCalError('Could not get calendar token. Try closing and reopening the add-in.');
       return;
     }
 
-    const token   = result.value;
-    const base    = Office.context.mailbox.restUrl;
-    // /calendarview returns only YOUR calendar events in the date range
-    // This is the correct endpoint — not messages, not shared calendars
-    const url = `${base}/v2.0/me/calendarview`
-      + `?startDateTime=${fromStr}T00:00:00Z`
-      + `&endDateTime=${toStr}T23:59:59Z`
-      + `&$select=Subject,Start,End,Location,BodyPreview,Body,Attendees,OnlineMeeting,Categories,Id,Organizer,IsOrganizer`
+    const token = result.value;
+    const base  = Office.context.mailbox.restUrl;
+    const url   = `${base}/v2.0/me/calendarview`
+      + `?startDateTime=${sp.dateFrom}T00:00:00Z`
+      + `&endDateTime=${sp.dateTo}T23:59:59Z`
+      + `&$select=Subject,Start,End,Location,Body,BodyPreview,Attendees,OnlineMeeting,Categories,Id,Organizer,IsOrganizer,HasAttachments,WebLink`
       + `&$top=100`
       + `&$orderby=Start/DateTime`;
 
@@ -869,53 +891,38 @@ function loadCalendar() {
         Prefer: `outlook.timezone="${Intl.DateTimeFormat().resolvedOptions().timeZone}"`
       }
     })
-    .then(r => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.json();
-    })
+    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
     .then(data => {
       document.getElementById('cal-loading').style.display = 'none';
+      const all     = data.value || [];
+      const matched = all.filter(ev => calEventMatchesCriteria(ev, sp));
 
-      const allEvents = data.value || [];
-      if (allEvents.length === 0) {
+      if (all.length === 0) {
         showCalEmpty('No calendar events found in this date range.');
-        return;
+      } else if (matched.length === 0) {
+        showCalEmpty(`Found ${all.length} events but none matched the criteria.<br>Try loosening the filters.`);
+      } else {
+        renderCalEvents(matched, personalEmail);
       }
-
-      // Filter using ONLY calendar criteria — email groups not involved
-      const matched = allEvents.filter(ev => calEventMatchesCriteria(ev, criteria));
-
-      if (matched.length === 0) {
-        showCalEmpty(`Found ${allEvents.length} events in range but none matched your criteria.<br>Try loosening the filters.`);
-        return;
-      }
-
-      renderCalEvents(matched, personalEmail);
     })
-    .catch(err => {
-      document.getElementById('cal-loading').style.display = 'none';
-      showCalError(`Calendar fetch failed: ${err.message}.<br>Try closing and reopening the add-in.`);
-    });
+    .catch(err => showCalError(`Fetch failed: ${err.message}`));
   });
 }
 
 function showCalEmpty(msg) {
   const el = document.getElementById('cal-empty');
-  el.style.display = 'flex';
+  el.querySelector('.empty-icon').textContent = '📅';
   el.querySelector('.empty-text').innerHTML = msg;
+  el.style.display = 'flex';
 }
 
 function showCalError(msg) {
   document.getElementById('cal-loading').style.display = 'none';
   const el = document.getElementById('cal-empty');
-  el.style.display = 'flex';
   el.querySelector('.empty-icon').textContent = '⚠️';
   el.querySelector('.empty-text').innerHTML = msg;
+  el.style.display = 'flex';
 }
-
-// Stores all loaded events for batch operations
-let _calEvents = [];
-let _calPersonalEmail = '';
 
 function renderCalEvents(events, personalEmail) {
   _calEvents = events;
@@ -924,15 +931,9 @@ function renderCalEvents(events, personalEmail) {
   const container = document.getElementById('cal-container');
   container.innerHTML = '';
 
-  if (events.length === 0) {
-    document.getElementById('cal-empty').style.display = 'flex';
-    document.getElementById('cal-empty').querySelector('.empty-text').innerHTML = 'No matching events found.<br>Try adjusting your criteria.';
-    return;
-  }
-
   // ── Batch toolbar ──
+  const sp = _activeSyncProfile;
   const toolbar = document.createElement('div');
-  toolbar.id = 'cal-toolbar';
   toolbar.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:10;';
   toolbar.innerHTML = `
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--muted);">
@@ -940,41 +941,42 @@ function renderCalEvents(events, personalEmail) {
         style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
       <span id="cal-select-label">Select all (${events.length})</span>
     </label>
+    ${sp ? `<span style="font-size:10px;font-family:var(--mono);color:var(--muted);">— ${sp.name}</span>` : ''}
     <div style="flex:1"></div>
-    <button class="btn btn-green btn-sm" id="cal-batch-btn" onclick="openAllSelected()" disabled
-      style="opacity:0.4;transition:opacity 0.2s;">
+    <button class="btn btn-green btn-sm" id="cal-batch-btn" onclick="openAllSelected()" disabled style="opacity:0.4;transition:opacity 0.2s;">
       📨 Open Selected (0)
     </button>
   `;
   container.appendChild(toolbar);
 
-  // ── Event cards ──
   events.forEach((ev, idx) => {
     const card = document.createElement('div');
     card.className = 'cal-event-card';
     card.style.cursor = 'default';
 
-    const start = new Date(ev.Start.DateTime);
-    const end   = new Date(ev.End.DateTime);
-    const dateStr = start.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
-    const timeStr = `${start.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})} – ${end.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`;
-
-    const confType = hasConferenceLink(ev) ? extractConferenceType(ev) : null;
-    const cats = ev.Categories || [];
-    const attendees = (ev.Attendees || []).map(a => a.EmailAddress?.Name || a.EmailAddress?.Address).filter(Boolean);
+    const start      = new Date(ev.Start.DateTime);
+    const end        = new Date(ev.End.DateTime);
+    const dateStr    = start.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+    const timeStr    = `${start.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})} – ${end.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`;
+    const confType   = hasConferenceLink(ev) ? extractConferenceType(ev) : null;
+    const cats       = ev.Categories || [];
+    const attendees  = (ev.Attendees || []).map(a => a.EmailAddress?.Name || a.EmailAddress?.Address).filter(Boolean);
+    const hasAttach  = ev.HasAttachments;
+    const webLink    = ev.WebLink || null;
 
     const badges = [
       confType === 'teams' ? '<span class="cal-badge badge-teams">Teams</span>' : '',
-      confType === 'zoom'  ? '<span class="cal-badge badge-zoom">Zoom</span>'  : '',
-      confType === 'meet'  ? '<span class="cal-badge badge-zoom">Meet</span>'  : '',
-      cats.map(c => `<span class="cal-badge badge-category">${c}</span>`).join('')
+      confType === 'zoom'  ? '<span class="cal-badge badge-zoom">Zoom</span>'   : '',
+      confType === 'meet'  ? '<span class="cal-badge badge-zoom">Meet</span>'   : '',
+      confType === 'webex' ? '<span class="cal-badge badge-zoom">Webex</span>'  : '',
+      cats.map(c => `<span class="cal-badge badge-category">${c}</span>`).join(''),
+      hasAttach ? '<span class="cal-badge" style="background:#2a2a1a;color:#d4b84a;">📎 attachments</span>' : ''
     ].join('');
 
     card.innerHTML = `
       <div style="display:flex;align-items:flex-start;gap:10px;">
-        <input type="checkbox" class="cal-check" data-idx="${idx}"
-          onchange="updateBatchBtn()"
-          style="accent-color:var(--accent);width:15px;height:15px;margin-top:2px;flex-shrink:0;cursor:pointer;">
+        <input type="checkbox" class="cal-check" data-idx="${idx}" onchange="updateBatchBtn()"
+          style="accent-color:var(--accent);width:15px;height:15px;margin-top:3px;flex-shrink:0;cursor:pointer;">
         <div style="flex:1;min-width:0;">
           <div class="cal-event-title">${badges}${ev.Subject || '(no title)'}</div>
           <div class="cal-event-meta">
@@ -983,13 +985,16 @@ function renderCalEvents(events, personalEmail) {
             ${ev.Location ? `<span>📍 ${ev.Location}</span>` : ''}
             ${attendees.length ? `<span>👥 ${attendees.slice(0,3).join(', ')}${attendees.length>3?` +${attendees.length-3} more`:''}</span>` : ''}
           </div>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+            ${webLink ? `<a href="${webLink}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none;">🔗 Open original</a>` : ''}
+            ${hasAttach ? `<span style="font-size:11px;color:var(--yellow);">📎 Note: attachments must be added manually</span>` : ''}
+          </div>
         </div>
       </div>
     `;
 
-    // Clicking the card (not the checkbox) toggles selection
     card.addEventListener('click', e => {
-      if (e.target.type === 'checkbox') return;
+      if (e.target.type === 'checkbox' || e.target.tagName === 'A') return;
       const cb = card.querySelector('.cal-check');
       cb.checked = !cb.checked;
       updateBatchBtn();
@@ -1010,24 +1015,23 @@ function updateBatchBtn() {
   const btn     = document.getElementById('cal-batch-btn');
   const allBox  = document.getElementById('cal-select-all');
   const label   = document.getElementById('cal-select-label');
+  if (!btn) return;
 
   btn.textContent = `📨 Open Selected (${checked.length})`;
   btn.disabled    = checked.length === 0;
   btn.style.opacity = checked.length === 0 ? '0.4' : '1';
-
   allBox.indeterminate = checked.length > 0 && checked.length < total;
-  allBox.checked = checked.length === total;
+  allBox.checked = checked.length === total && total > 0;
   label.textContent = `Select all (${total})`;
 }
 
 function openAllSelected() {
   const checked = [...document.querySelectorAll('.cal-check:checked')];
-  if (checked.length === 0) return;
+  if (!checked.length) return;
 
   const personalEmail = _calPersonalEmail;
   if (!personalEmail) { toast('Personal email not set.'); return; }
 
-  // Open forms one at a time with a short delay so Outlook can handle them
   let i = 0;
   function openNext() {
     if (i >= checked.length) {
@@ -1035,10 +1039,9 @@ function openAllSelected() {
       return;
     }
     const idx = parseInt(checked[i].dataset.idx);
-    const ev  = _calEvents[idx];
-    openInviteForm(ev, personalEmail);
+    openInviteForm(_calEvents[idx], personalEmail);
     i++;
-    setTimeout(openNext, 800); // stagger so Outlook doesn't drop forms
+    setTimeout(openNext, 900);
   }
   openNext();
 }
@@ -1046,16 +1049,24 @@ function openAllSelected() {
 function openInviteForm(ev, personalEmail) {
   const start     = new Date(ev.Start.DateTime);
   const end       = new Date(ev.End.DateTime);
-  const attendees = (ev.Attendees || []).map(a => a.EmailAddress?.Name || '').filter(Boolean);
+  const attendees = (ev.Attendees || []).map(a => a.EmailAddress?.Name || a.EmailAddress?.Address || '').filter(Boolean);
   const joinUrl   = extractJoinUrl(ev);
 
+  // Use full body if available, fall back to preview
+  const originalBody = ev.Body?.Content
+    ? ev.Body.Content.replace(/<[^>]*>/g, ' ').replace(/\s{2,}/g, ' ').trim()
+    : (ev.BodyPreview || '');
+
   const body = [
-    'Synced from work calendar.',
+    '── Synced from work calendar ──',
     '',
     `Original attendees: ${attendees.join(', ') || 'N/A'}`,
     joinUrl ? `Join link: ${joinUrl}` : '',
+    ev.HasAttachments ? '📎 This event had attachments — please add them manually.' : '',
     '',
-    ev.BodyPreview || ''
+    '── Original event body ──',
+    '',
+    originalBody
   ].filter(l => l !== null).join('\n');
 
   Office.context.mailbox.displayNewAppointmentForm({
@@ -1063,30 +1074,10 @@ function openInviteForm(ev, personalEmail) {
     optionalAttendees: [],
     start,
     end,
-    location: ev.Location || '',
+    location: ev.Location || (joinUrl ? 'See join link in body' : ''),
     subject:  ev.Subject  || '',
     body
   });
-}
-
-// Keep single-event sync for backwards compat
-function syncEvent(ev, personalEmail) {
-  openInviteForm(ev, personalEmail);
-  toast('Event opened — review and Send to sync to your personal calendar!');
-}
-
-function previewEvent(ev) {
-  const attendees = (ev.Attendees || []).map(a => a.EmailAddress?.Name || a.EmailAddress?.Address).filter(Boolean);
-  const joinUrl = extractJoinUrl(ev);
-  const start = new Date(ev.Start.DateTime);
-  const end = new Date(ev.End.DateTime);
-  alert([
-    `📅 ${ev.Subject}`,
-    `Time: ${start.toLocaleString()} – ${end.toLocaleTimeString()}`,
-    `Location: ${ev.Location || 'N/A'}`,
-    `Attendees: ${attendees.join(', ') || 'None listed'}`,
-    joinUrl ? `Join: ${joinUrl}` : '',
-  ].filter(Boolean).join('\n'));
 }
 
 // ═══════════════════════════════════════════════
@@ -1180,6 +1171,7 @@ function removeTeam(i) {
 function saveSettings() {
   localStorage.setItem('pto_groups', JSON.stringify(groups));
   localStorage.setItem('pto_team', JSON.stringify(teamMembers));
+  localStorage.setItem('pto_sync_profiles', JSON.stringify(syncProfiles));
   const days = document.getElementById('default-days').value;
   if (days) localStorage.setItem('pto_default_days', days);
   toast('Settings saved!');
