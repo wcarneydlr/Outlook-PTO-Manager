@@ -502,50 +502,89 @@ function loadEmails() {
   const toStr   = document.getElementById('date-to').value;
   if (!fromStr || !toStr) { toast('Please select a date range.'); return; }
 
-  const fromDate = new Date(fromStr + 'T00:00:00');
-  const toDate   = new Date(toStr   + 'T23:59:59');
-
   document.getElementById('triage-empty').style.display = 'none';
   document.getElementById('triage-loading').style.display = 'block';
   document.getElementById('group-container').innerHTML = '';
   document.getElementById('triage-summary').style.display = 'none';
 
-  // Use Office mailbox REST API to get messages
-  const mailbox = Office.context.mailbox;
-  const token = mailbox.getUserIdentityTokenAsync;
+  const ewsRequest = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+               xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"
+               xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages">
+  <soap:Body>
+    <m:FindItem Traversal="Shallow">
+      <m:ItemShape>
+        <t:BaseShape>AllProperties</t:BaseShape>
+      </m:ItemShape>
+      <m:Restriction>
+        <t:And>
+          <t:IsGreaterThanOrEqualTo>
+            <t:FieldURI FieldURI="item:DateTimeReceived"/>
+            <t:FieldURIOrConstant><t:Constant Value="${fromStr}T00:00:00Z"/></t:FieldURIOrConstant>
+          </t:IsGreaterThanOrEqualTo>
+          <t:IsLessThanOrEqualTo>
+            <t:FieldURI FieldURI="item:DateTimeReceived"/>
+            <t:FieldURIOrConstant><t:Constant Value="${toStr}T23:59:59Z"/></t:FieldURIOrConstant>
+          </t:IsLessThanOrEqualTo>
+        </t:And>
+      </m:Restriction>
+      <m:SortOrder>
+        <t:FieldOrder Order="Descending">
+          <t:FieldURI FieldURI="item:DateTimeReceived"/>
+        </t:FieldOrder>
+      </m:SortOrder>
+      <m:ParentFolderIds>
+        <t:DistinguishedFolderId Id="inbox"/>
+      </m:ParentFolderIds>
+    </m:FindItem>
+  </soap:Body>
+</soap:Envelope>`;
 
-  // Build REST URL with date filter
-  const restUrl = mailbox.restUrl;
-  const accessToken = null; // will use getCallbackTokenAsync
+  Office.context.mailbox.makeEwsRequestAsync(ewsRequest, function(result) {
+    document.getElementById('triage-loading').style.display = 'none';
 
-  mailbox.getCallbackTokenAsync({ isRest: true }, function(result) {
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
-      fallbackDemo(fromDate, toDate);
+      // Fall back to demo data if EWS fails
+      fallbackDemo();
       return;
     }
-    const token = result.value;
-    const apiBase = mailbox.restUrl + '/v2.0/me/mailfolders/inbox/messages';
-    const filter = `ReceivedDateTime ge ${fromDate.toISOString()} and ReceivedDateTime le ${toDate.toISOString()}`;
-    const select = 'Subject,From,ReceivedDateTime,IsRead,BodyPreview,ToRecipients,CcRecipients,Id';
-    const url = `${apiBase}?$filter=${encodeURIComponent(filter)}&$select=${select}&$top=100&$orderby=ReceivedDateTime desc`;
 
-    fetch(url, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } })
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById('triage-loading').style.display = 'none';
-        if (data.value && data.value.length > 0) {
-          processAndRenderEmails(data.value);
-        } else {
-          document.getElementById('triage-empty').style.display = 'flex';
-          document.getElementById('triage-empty').querySelector('.empty-text').innerHTML =
-            'No emails found in the selected date range.';
-        }
-      })
-      .catch(() => fallbackDemo(fromDate, toDate));
+    const parser = new DOMParser();
+    const xml    = parser.parseFromString(result.value, 'text/xml');
+    const ns     = 'http://schemas.microsoft.com/exchange/services/2006/types';
+    const items  = Array.from(xml.getElementsByTagNameNS(ns, 'Message'));
+
+    if (items.length === 0) {
+      document.getElementById('triage-empty').style.display = 'flex';
+      document.getElementById('triage-empty').querySelector('.empty-text').innerHTML = 'No emails found in the selected date range.';
+      return;
+    }
+
+    function ewsText(node, tag) {
+      const el = node.getElementsByTagNameNS(ns, tag)[0];
+      return el ? el.textContent.trim() : '';
+    }
+
+    const emails = items.map(item => {
+      const toRecips = Array.from(item.getElementsByTagNameNS(ns, 'ToRecipient'));
+      const ccRecips = Array.from(item.getElementsByTagNameNS(ns, 'CcRecipient'));
+      return {
+        Subject:          ewsText(item, 'Subject'),
+        From:             { EmailAddress: { Name: ewsText(item, 'Name'), Address: ewsText(item, 'EmailAddress') } },
+        ReceivedDateTime: ewsText(item, 'DateTimeReceived'),
+        IsRead:           ewsText(item, 'IsRead') === 'true',
+        BodyPreview:      ewsText(item, 'Preview') || ewsText(item, 'Body').substring(0, 200),
+        ToRecipients:     toRecips,
+        CcRecipients:     ccRecips,
+        Id:               item.getElementsByTagNameNS(ns, 'ItemId')[0]?.getAttribute('Id') || ''
+      };
+    });
+
+    processAndRenderEmails(emails);
   });
 }
 
-function fallbackDemo(fromDate, toDate) {
+function fallbackDemo() {
   // Demo data for when REST token is unavailable (sideload testing)
   document.getElementById('triage-loading').style.display = 'none';
   const demo = [
@@ -680,11 +719,11 @@ function buildGroupCard(name, color, emails) {
 }
 
 function openEmail(id) {
-  // Attempt to open email — works in full Outlook context
   try {
+    // EWS ItemId works with displayMessageForm in Exchange environments
     Office.context.mailbox.displayMessageForm(id);
   } catch(e) {
-    toast('Click the email in your inbox to open it.');
+    toast('Unable to open — click the email directly in your inbox.');
   }
 }
 
@@ -875,43 +914,83 @@ function runSyncProfile(i) {
   document.getElementById('cal-loading').style.display = 'block';
   document.getElementById('cal-container').innerHTML = '';
 
-  Office.context.mailbox.getCallbackTokenAsync({ isRest: true }, function(result) {
+  // EWS works with basic sideloaded add-ins — no REST token or VersionOverrides needed
+  const ewsRequest = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+               xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"
+               xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages">
+  <soap:Body>
+    <m:FindItem Traversal="Shallow">
+      <m:ItemShape>
+        <t:BaseShape>AllProperties</t:BaseShape>
+      </m:ItemShape>
+      <m:CalendarView MaxEntriesReturned="100"
+        StartDate="${sp.dateFrom}T00:00:00Z"
+        EndDate="${sp.dateTo}T23:59:59Z"/>
+      <m:ParentFolderIds>
+        <t:DistinguishedFolderId Id="calendar"/>
+      </m:ParentFolderIds>
+    </m:FindItem>
+  </soap:Body>
+</soap:Envelope>`;
+
+  Office.context.mailbox.makeEwsRequestAsync(ewsRequest, function(result) {
+    document.getElementById('cal-loading').style.display = 'none';
+
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
-      showCalError('Could not get calendar token. Try closing and reopening the add-in.');
+      showCalError(`EWS request failed: ${result.error?.message || 'Unknown error'}.<br>Make sure you are connected to Exchange/M365.`);
       return;
     }
 
-    const token = result.value;
-    const base  = Office.context.mailbox.restUrl;
-    const url   = `${base}/v2.0/me/calendarview`
-      + `?startDateTime=${sp.dateFrom}T00:00:00Z`
-      + `&endDateTime=${sp.dateTo}T23:59:59Z`
-      + `&$select=Subject,Start,End,Location,Body,BodyPreview,Attendees,OnlineMeeting,Categories,Id,Organizer,IsOrganizer,HasAttachments,WebLink`
-      + `&$top=100`
-      + `&$orderby=Start/DateTime`;
+    const parser = new DOMParser();
+    const xml    = parser.parseFromString(result.value, 'text/xml');
+    const ns     = 'http://schemas.microsoft.com/exchange/services/2006/types';
+    const items  = Array.from(xml.getElementsByTagNameNS(ns, 'CalendarItem'));
 
-    fetch(url, {
-      headers: {
-        Authorization: 'Bearer ' + token,
-        Accept: 'application/json',
-        Prefer: `outlook.timezone="${Intl.DateTimeFormat().resolvedOptions().timeZone}"`
-      }
-    })
-    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-    .then(data => {
-      document.getElementById('cal-loading').style.display = 'none';
-      const all     = data.value || [];
-      const matched = all.filter(ev => calEventMatchesCriteria(ev, sp));
+    if (items.length === 0) {
+      showCalEmpty('No calendar events found in this date range.');
+      return;
+    }
 
-      if (all.length === 0) {
-        showCalEmpty('No calendar events found in this date range.');
-      } else if (matched.length === 0) {
-        showCalEmpty(`Found ${all.length} events but none matched the criteria.<br>Try loosening the filters.`);
-      } else {
-        renderCalEvents(matched, personalEmail);
-      }
-    })
-    .catch(err => showCalError(`Fetch failed: ${err.message}`));
+    // Map EWS XML nodes to a consistent event object
+    function ewsText(node, tag) {
+      const el = node.getElementsByTagNameNS(ns, tag)[0];
+      return el ? el.textContent.trim() : '';
+    }
+
+    const events = items.map(item => {
+      const body      = ewsText(item, 'Body');
+      const attendees = Array.from(item.getElementsByTagNameNS(ns, 'Attendee')).map(a => ({
+        EmailAddress: {
+          Name:    ewsText(a, 'Name'),
+          Address: ewsText(a, 'EmailAddress')
+        }
+      }));
+      const categories = Array.from(item.getElementsByTagNameNS(ns, 'String')).map(s => s.textContent);
+
+      return {
+        Subject:        ewsText(item, 'Subject'),
+        Start:          { DateTime: ewsText(item, 'Start') },
+        End:            { DateTime: ewsText(item, 'End') },
+        Location:       ewsText(item, 'Location'),
+        Body:           { Content: body },
+        BodyPreview:    body.replace(/<[^>]*>/g, ' ').substring(0, 200),
+        Attendees:      attendees,
+        Categories:     categories,
+        HasAttachments: ewsText(item, 'HasAttachments') === 'true',
+        WebLink:        null,
+        OnlineMeeting:  null,
+        Id:             ewsText(item, 'ItemId') || ewsText(item, 'Id')
+      };
+    });
+
+    const matched = events.filter(ev => calEventMatchesCriteria(ev, sp));
+
+    if (matched.length === 0) {
+      showCalEmpty(`Found ${events.length} event${events.length !== 1 ? 's' : ''} but none matched the criteria.<br>Try loosening the filters.`);
+    } else {
+      renderCalEvents(matched, personalEmail);
+    }
   });
 }
 
