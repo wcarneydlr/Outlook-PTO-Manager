@@ -507,14 +507,28 @@ function loadEmails() {
   document.getElementById('group-container').innerHTML = '';
   document.getElementById('triage-summary').style.display = 'none';
 
+  const primaryEmail = Office.context.mailbox.userProfile.emailAddress;
+
   const ewsRequest = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
                xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"
                xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages">
+  <soap:Header>
+    <t:RequestServerVersion Version="Exchange2013"/>
+  </soap:Header>
   <soap:Body>
     <m:FindItem Traversal="Shallow">
       <m:ItemShape>
-        <t:BaseShape>AllProperties</t:BaseShape>
+        <t:BaseShape>IdOnly</t:BaseShape>
+        <t:AdditionalProperties>
+          <t:FieldURI FieldURI="item:Subject"/>
+          <t:FieldURI FieldURI="item:DateTimeReceived"/>
+          <t:FieldURI FieldURI="item:IsRead"/>
+          <t:FieldURI FieldURI="item:Preview"/>
+          <t:FieldURI FieldURI="message:From"/>
+          <t:FieldURI FieldURI="message:ToRecipients"/>
+          <t:FieldURI FieldURI="message:CcRecipients"/>
+        </t:AdditionalProperties>
       </m:ItemShape>
       <m:Restriction>
         <t:And>
@@ -534,7 +548,9 @@ function loadEmails() {
         </t:FieldOrder>
       </m:SortOrder>
       <m:ParentFolderIds>
-        <t:DistinguishedFolderId Id="inbox"/>
+        <t:DistinguishedFolderId Id="inbox">
+          <t:Mailbox><t:EmailAddress>${primaryEmail}</t:EmailAddress></t:Mailbox>
+        </t:DistinguishedFolderId>
       </m:ParentFolderIds>
     </m:FindItem>
   </soap:Body>
@@ -544,8 +560,10 @@ function loadEmails() {
     document.getElementById('triage-loading').style.display = 'none';
 
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
-      // Fall back to demo data if EWS fails
-      fallbackDemo();
+      document.getElementById('triage-empty').style.display = 'flex';
+      document.getElementById('triage-empty').querySelector('.empty-icon').textContent = '⚠️';
+      document.getElementById('triage-empty').querySelector('.empty-text').innerHTML =
+        `EWS error: ${result.error?.message || 'Unknown'}<br><small>Make sure you are connected to Exchange.</small>`;
       return;
     }
 
@@ -927,16 +945,27 @@ function runSyncProfile(i) {
   <soap:Body>
     <m:FindItem Traversal="Shallow">
       <m:ItemShape>
-        <t:BaseShape>AllProperties</t:BaseShape>
+        <t:BaseShape>IdOnly</t:BaseShape>
+        <t:AdditionalProperties>
+          <t:FieldURI FieldURI="item:Subject"/>
+          <t:FieldURI FieldURI="item:HasAttachments"/>
+          <t:FieldURI FieldURI="item:Categories"/>
+          <t:FieldURI FieldURI="item:Body"/>
+          <t:FieldURI FieldURI="calendar:Start"/>
+          <t:FieldURI FieldURI="calendar:End"/>
+          <t:FieldURI FieldURI="calendar:Location"/>
+          <t:FieldURI FieldURI="calendar:RequiredAttendees"/>
+          <t:FieldURI FieldURI="calendar:OptionalAttendees"/>
+          <t:FieldURI FieldURI="calendar:IsOnlineMeeting"/>
+          <t:FieldURI FieldURI="calendar:OnlineMeetingUrl"/>
+        </t:AdditionalProperties>
       </m:ItemShape>
       <m:CalendarView MaxEntriesReturned="100"
         StartDate="${sp.dateFrom}T00:00:00Z"
         EndDate="${sp.dateTo}T23:59:59Z"/>
       <m:ParentFolderIds>
         <t:DistinguishedFolderId Id="calendar">
-          <t:Mailbox>
-            <t:EmailAddress>${primaryEmail}</t:EmailAddress>
-          </t:Mailbox>
+          <t:Mailbox><t:EmailAddress>${primaryEmail}</t:EmailAddress></t:Mailbox>
         </t:DistinguishedFolderId>
       </m:ParentFolderIds>
     </m:FindItem>
@@ -969,13 +998,17 @@ function runSyncProfile(i) {
 
     const events = items.map(item => {
       const body      = ewsText(item, 'Body');
-      const attendees = Array.from(item.getElementsByTagNameNS(ns, 'Attendee')).map(a => ({
+      const attendees = [
+        ...Array.from(item.getElementsByTagNameNS(ns, 'RequiredAttendee')),
+        ...Array.from(item.getElementsByTagNameNS(ns, 'OptionalAttendee'))
+      ].map(a => ({
         EmailAddress: {
           Name:    ewsText(a, 'Name'),
           Address: ewsText(a, 'EmailAddress')
         }
       }));
       const categories = Array.from(item.getElementsByTagNameNS(ns, 'String')).map(s => s.textContent);
+      const onlineMeetingUrl = ewsText(item, 'OnlineMeetingUrl');
 
       return {
         Subject:        ewsText(item, 'Subject'),
@@ -988,8 +1021,8 @@ function runSyncProfile(i) {
         Categories:     categories,
         HasAttachments: ewsText(item, 'HasAttachments') === 'true',
         WebLink:        null,
-        OnlineMeeting:  null,
-        Id:             ewsText(item, 'ItemId') || ewsText(item, 'Id')
+        OnlineMeeting:  onlineMeetingUrl ? { joinUrl: onlineMeetingUrl } : null,
+        Id:             item.getElementsByTagNameNS(ns, 'ItemId')[0]?.getAttribute('Id') || ''
       };
     });
 
