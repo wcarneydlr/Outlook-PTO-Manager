@@ -563,13 +563,34 @@ function loadEmails() {
       document.getElementById('triage-empty').style.display = 'flex';
       document.getElementById('triage-empty').querySelector('.empty-icon').textContent = '⚠️';
       document.getElementById('triage-empty').querySelector('.empty-text').innerHTML =
-        `EWS error: ${result.error?.message || 'Unknown'}<br><small>Make sure you are connected to Exchange.</small>`;
+        `EWS failed (status): ${result.error?.message || 'Unknown'}`;
+      return;
+    }
+
+    // Show raw response for diagnostics
+    const raw = result.value || '';
+    if (!raw) {
+      document.getElementById('triage-empty').style.display = 'flex';
+      document.getElementById('triage-empty').querySelector('.empty-icon').textContent = '⚠️';
+      document.getElementById('triage-empty').querySelector('.empty-text').innerHTML = 'EWS returned empty response.';
       return;
     }
 
     const parser = new DOMParser();
-    const xml    = parser.parseFromString(result.value, 'text/xml');
+    const xml    = parser.parseFromString(raw, 'text/xml');
     const ns     = 'http://schemas.microsoft.com/exchange/services/2006/types';
+
+    // Check for EWS-level fault or error
+    const fault = xml.getElementsByTagName('faultstring')[0];
+    const ewsErr = xml.getElementsByTagNameNS('http://schemas.microsoft.com/exchange/services/2006/messages', 'MessageText')[0];
+    if (fault || ewsErr) {
+      document.getElementById('triage-empty').style.display = 'flex';
+      document.getElementById('triage-empty').querySelector('.empty-icon').textContent = '⚠️';
+      document.getElementById('triage-empty').querySelector('.empty-text').innerHTML =
+        `Exchange error: ${fault?.textContent || ewsErr?.textContent || 'See console'}`;
+      return;
+    }
+
     const items  = Array.from(xml.getElementsByTagNameNS(ns, 'Message'));
 
     if (items.length === 0) {
@@ -976,13 +997,25 @@ function runSyncProfile(i) {
     document.getElementById('cal-loading').style.display = 'none';
 
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
-      showCalError(`EWS request failed: ${result.error?.message || 'Unknown error'}.<br><br>Make sure you are signed into Exchange/M365 in Outlook and try again.`);
+      showCalError(`EWS failed (status): ${result.error?.message || 'Unknown'}`);
       return;
     }
 
+    const raw = result.value || '';
+    if (!raw) { showCalError('EWS returned empty response.'); return; }
+
     const parser = new DOMParser();
-    const xml    = parser.parseFromString(result.value, 'text/xml');
+    const xml    = parser.parseFromString(raw, 'text/xml');
     const ns     = 'http://schemas.microsoft.com/exchange/services/2006/types';
+    const mns    = 'http://schemas.microsoft.com/exchange/services/2006/messages';
+
+    const fault  = xml.getElementsByTagName('faultstring')[0];
+    const ewsErr = xml.getElementsByTagNameNS(mns, 'MessageText')[0];
+    if (fault || ewsErr) {
+      showCalError(`Exchange error: ${fault?.textContent || ewsErr?.textContent}`);
+      return;
+    }
+
     const items  = Array.from(xml.getElementsByTagNameNS(ns, 'CalendarItem'));
 
     if (items.length === 0) {
