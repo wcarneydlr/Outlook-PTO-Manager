@@ -556,7 +556,21 @@ function loadEmails() {
   </soap:Body>
 </soap:Envelope>`;
 
+  let ewsEmailDone = false;
+  const ewsEmailTimeout = setTimeout(() => {
+    if (ewsEmailDone) return;
+    ewsEmailDone = true;
+    document.getElementById('triage-loading').style.display = 'none';
+    document.getElementById('triage-empty').style.display = 'flex';
+    document.getElementById('triage-empty').querySelector('.empty-icon').textContent = '⚠️';
+    document.getElementById('triage-empty').querySelector('.empty-text').innerHTML =
+      `EWS timed out after 15s.<br><small>Your M365 tenant may block EWS for sideloaded add-ins.<br>Try opening Outlook on the Web (outlook.office.com) and running from there.</small>`;
+  }, 15000);
+
   Office.context.mailbox.makeEwsRequestAsync(ewsRequest, function(result) {
+    if (ewsEmailDone) return;
+    ewsEmailDone = true;
+    clearTimeout(ewsEmailTimeout);
     document.getElementById('triage-loading').style.display = 'none';
 
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
@@ -993,7 +1007,17 @@ function runSyncProfile(i) {
   </soap:Body>
 </soap:Envelope>`;
 
+  let ewsCalDone = false;
+  const ewsCalTimeout = setTimeout(() => {
+    if (ewsCalDone) return;
+    ewsCalDone = true;
+    showCalError(`EWS timed out after 15s.<br><small>Your M365 tenant may block EWS for sideloaded add-ins.<br>Try opening Outlook on the Web (outlook.office.com) and running from there.</small>`);
+  }, 15000);
+
   Office.context.mailbox.makeEwsRequestAsync(ewsRequest, function(result) {
+    if (ewsCalDone) return;
+    ewsCalDone = true;
+    clearTimeout(ewsCalTimeout);
     document.getElementById('cal-loading').style.display = 'none';
 
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
